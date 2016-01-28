@@ -210,7 +210,7 @@
             blend(ctx.canvas, src, x, y, src.width, src.height, opacity, blendMode);
             return;
       }
-      ctx.globalAlpha = opacity / 255;
+      ctx.globalAlpha = opacity;
       ctx.globalCompositeOperation = blendMode;
       ctx.drawImage(src, x, y);
    }
@@ -233,11 +233,11 @@
          for (var i = 0, child; i < layer.Child.length; ++i) {
             child = layer.Child[i];
             if (!child.Clipping) {
-               drawLayer(bbctx, child, -layer.X, -layer.Y, child.Opacity, child.BlendMode);
+               drawLayer(bbctx, child, -layer.X, -layer.Y, child.Opacity / 255, child.BlendMode);
             }
          }
       } else if (layer.Canvas) {
-         draw(bbctx, layer.Canvas, 0, 0, 255, 'source-over');
+         draw(bbctx, layer.Canvas, 0, 0, 1, 'source-over');
       }
 
       if (layer.MaskCanvas) {
@@ -246,7 +246,7 @@
             layer.MaskCanvas,
             layer.MaskX - layer.X,
             layer.MaskY - layer.Y,
-            255,
+            1,
             layer.MaskDefaultColor ? 'destination-out' : 'destination-in'
          );
       }
@@ -261,19 +261,19 @@
 
       if (layer.BlendClippedElements) {
          clear(cbbctx);
-         draw(cbbctx, bb, 0, 0, 255, 'source-over');
+         draw(cbbctx, bb, 0, 0, 1, 'source-over');
          var changed = false;
          for (var i = 0, child; i < layer.clip.length; ++i) {
             child = layer.clip[i];
             changed = drawLayer(
                cbbctx,
                child, -layer.X, -layer.Y,
-               child.Opacity,
+               child.Opacity / 255,
                child.BlendMode
             ) || changed;
          }
          if (changed) {
-            draw(cbbctx, bb, 0, 0, 255, 'destination-in');
+            draw(cbbctx, bb, 0, 0, 1, 'destination-in');
          }
          draw(ctx, cbb, x + layer.X, y + layer.Y, opacity, blendMode);
          return true;
@@ -285,11 +285,11 @@
       clear(cbbctx);
       for (var i = 0, child; i < layer.clip.length; ++i) {
          child = layer.clip[i];
-         if (!drawLayer(cbbctx, child, -layer.X, -layer.Y, 255, 'source-over')) {
+         if (!drawLayer(cbbctx, child, -layer.X, -layer.Y, 1, 'source-over')) {
             continue;
          }
-         draw(cbbctx, bb, 0, 0, 255, 'destination-in');
-         draw(ctx, cbb, x + layer.X, y + layer.Y, child.Opacity, child.BlendMode);
+         draw(cbbctx, bb, 0, 0, 1, 'destination-in');
+         draw(ctx, cbb, x + layer.X, y + layer.Y, child.Opacity / 255, child.BlendMode);
          clear(cbbctx);
       }
       return true;
@@ -309,7 +309,7 @@
       for (var i = 0, layer; i < root.Child.length; ++i) {
          layer = root.Child[i];
          if (!layer.Clipping) {
-            drawLayer(ctx, layer, 0, 0, layer.Opacity, layer.BlendMode);
+            drawLayer(ctx, layer, 0, 0, layer.Opacity / 255, layer.BlendMode);
          }
       }
       ctx.restore();
@@ -325,15 +325,15 @@
 
    function linearDodge(d, s, w, h, alpha) {
       var sr, sg, sb, sa, dr, dg, db, da;
-      var a1, a2, a3, r, g, b, a;
+      var a1, a2, a3, r, g, b, a, tmp;
       for (var i = 0, len = w * h << 2; i < len; i += 4) {
-         sr = s[i], sg = s[i + 1], sb = s[i + 2], sa = (s[i + 3] * alpha * 32897) >> 23;
+         sr = s[i], sg = s[i + 1], sb = s[i + 2], sa = s[i + 3];
          dr = d[i], dg = d[i + 1], db = d[i + 2], da = d[i + 3];
 
-         a = sa * 32897;
-         a1 = (a * da) >> 23;
-         a2 = (a * (255 - da)) >> 23;
-         a3 = ((8388735 - a) * da) >> 23;
+         tmp = 0 | (sa * alpha * 32897);
+         a1 = (tmp * da) >> 23;
+         a2 = (tmp * (255 - da)) >> 23;
+         a3 = ((8388735 - tmp) * da) >> 23;
          a = a1 + a2 + a3;
          d[i + 3] = a;
          if (a) {
@@ -350,21 +350,21 @@
 
    function colorDodge(d, s, w, h, alpha) {
       var sr, sg, sb, sa, dr, dg, db, da;
-      var a1, a2, a3, r, g, b, a;
+      var a1, a2, a3, r, g, b, a, tmp;
       for (var i = 0, len = w * h << 2; i < len; i += 4) {
-         sr = s[i], sg = s[i + 1], sb = s[i + 2], sa = (s[i + 3] * alpha * 32897) >> 23;
+         sr = s[i], sg = s[i + 1], sb = s[i + 2], sa = s[i + 3];
          dr = d[i], dg = d[i + 1], db = d[i + 2], da = d[i + 3];
 
-         a = sa * 32897;
-         a1 = (a * da) >> 23;
-         a2 = (a * (255 - da)) >> 23;
-         a3 = ((8388735 - a) * da) >> 23;
+         tmp = 0 | (sa * alpha * 32897);
+         a1 = (tmp * da) >> 23;
+         a2 = (tmp * (255 - da)) >> 23;
+         a3 = ((8388735 - tmp) * da) >> 23;
          a = a1 + a2 + a3;
          d[i + 3] = a;
          if (a) {
-            r = sr == 255 ? 255 : dr == 0 ? 0 : dr * 255 / (255 - sr);
-            g = sg == 255 ? 255 : dg == 0 ? 0 : dg * 255 / (255 - sg);
-            b = sb == 255 ? 255 : db == 0 ? 0 : db * 255 / (255 - sb);
+            r = sr == 255 ? 255 : dr == 0 ? 0 : Math.min(255, 0 | (dr * 255 / (255 - sr)));
+            g = sg == 255 ? 255 : dg == 0 ? 0 : Math.min(255, 0 | (dg * 255 / (255 - sg)));
+            b = sb == 255 ? 255 : db == 0 ? 0 : Math.min(255, 0 | (db * 255 / (255 - sb)));
 
             d[i] = (r * a1 + sr * a2 + dr * a3) / a;
             d[i + 1] = (g * a1 + sg * a2 + dg * a3) / a;

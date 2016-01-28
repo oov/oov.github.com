@@ -1,6 +1,8 @@
 (function() {
    'use strict';
 
+   var hasBrokenColorDodge = false;
+
    function init() {
       var dz = document.getElementById('dropzone');
       dz.addEventListener('dragenter', function(e) {
@@ -43,12 +45,14 @@
       var manual = document.getElementById('manual');
       var fileLoadingUi = document.getElementById('file-loading-ui');
       var errorReportUi = document.getElementById('error-report-ui');
+      var main = document.getElementById('main');
       var bar = document.getElementById('progress-bar');
 
       fileOpenUi.style.display = 'none';
       manual.style.display = 'none';
       fileLoadingUi.style.display = 'block';
       errorReportUi.style.display = 'none';
+      main.style.display = 'none';
 
       var barCaptionContainer = bar.querySelector('.psdtool-progress-bar-caption');
       var barCaption = document.createTextNode('0% Complete');
@@ -65,37 +69,39 @@
       errorMessageContainer.appendChild(errorMessage);
 
       function progress(phase, progress, layer) {
-         var p, msg;
+         var p, msg, ptext;
          switch (phase) {
             case 0:
-               p = (progress * 50).toFixed(0);
+               p = progress * 50;
                msg = 'Parsing psd file...';
                break;
             case 1:
-               p = (50 + progress * 50).toFixed(0)
+               p = 50 + progress * 50;
                msg = 'Drawing "' + layer.Name + '" layer image...';
                break;
          }
+         ptext = p.toFixed(0) + '%';
          bar.style.width = p + '%';
-         bar.setAttribute('aria-valuenow', p);
-         barCaption.textContent = p + '% Complete';
-         caption.textContent = p + '% ' + msg;
+         bar.setAttribute('aria-valuenow', ptext);
+         barCaption.textContent = ptext + ' Complete';
+         caption.textContent = ptext + ' ' + msg;
       }
 
       loadAsArrayBuffer(file_or_url)
          .then(parse.bind(this, progress))
          .then(initMain)
-         .then(function(main) {
+         .then(function() {
             fileLoadingUi.style.display = 'none';
             fileOpenUi.style.display = 'none';
             manual.style.display = 'none';
             errorReportUi.style.display = 'none';
-            document.body.appendChild(main);
+            main.style.display = 'block';
          }, function(e) {
             fileLoadingUi.style.display = 'none';
             fileOpenUi.style.display = 'block';
             manual.style.display = 'block';
             errorReportUi.style.display = 'block';
+            main.style.display = 'none';
             errorMessage.textContent = e;
             console.error(e);
          });
@@ -148,19 +154,15 @@
             previewContainer.id = 'preview-container';
 
             var canvas = document.createElement('canvas');
-            canvas.width = root.Width;
-            canvas.height = root.Height;
-
             sideContainer.appendChild(buildTree(root, render.bind(null, canvas, root)));
 
-            var main = document.createElement('div');
-            main.id = 'main';
+            var main = document.getElementById('main');
+            main.innerHTML = '';
             previewContainer.appendChild(canvas);
             main.appendChild(sideContainer);
             main.appendChild(previewContainer);
-
             render(canvas, root);
-            deferred.resolve(main);
+            deferred.resolve();
          } catch (e) {
             deferred.reject(e);
          }
@@ -169,97 +171,410 @@
    }
 
    function draw(ctx, src, x, y, opacity, blendMode) {
-      if (typeof opacity == 'object') {
-         switch (opacity.BlendMode) {
-            case 'normal':
-               blendMode = 'source-over';
+      switch (blendMode) {
+         case 'source-over':
+         case 'destination-in':
+         case 'destination-out':
+            break;
+
+         case 'normal':
+            blendMode = 'source-over';
+            break;
+
+         case 'darken':
+         case 'multiply':
+         case 'color-burn':
+
+         case 'lighten':
+         case 'screen':
+            // case 'color-dodge': sometimes broken in chrome
+
+         case 'overlay':
+         case 'soft-light':
+         case 'hard-light':
+         case 'difference':
+         case 'exclusion':
+
+         case 'hue':
+         case 'saturation':
+         case 'color':
+         case 'luminosity':
+            break;
+
+         case 'color-dodge':
+            if (!hasBrokenColorDodge) {
                break;
-            case 'darken':
-            case 'multiply':
-            case 'color-burn':
+            }
 
-            case 'lighten':
-            case 'screen':
-            case 'color-dodge':
-
-            case 'overlay':
-            case 'soft-light':
-            case 'hard-light':
-            case 'difference':
-            case 'exclusion':
-
-            case 'hue':
-            case 'saturation':
-            case 'color':
-            case 'luminosity':
-               blendMode = opacity.BlendMode;
-               break;
-         }
-         opacity = opacity.Opacity / 255;
+         case 'linear-dodge':
+            blend(ctx.canvas, src, x, y, src.width, src.height, opacity, blendMode);
+            return;
       }
-      ctx.globalAlpha = opacity;
+      ctx.globalAlpha = opacity / 255;
       ctx.globalCompositeOperation = blendMode;
       ctx.drawImage(src, x, y);
    }
 
-   function render(canvas, root) {
+   function clear(ctx) {
+      ctx.globalAlpha = 1
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+   }
 
-      function r(ctx, layer) {
-         if (!layer.visibleInput.checked || layer.Opacity == 0) {
-            return
-         }
-         if (layer.Canvas && !layer.Clipping) {
-            if (layer.clip.length) {
-               if (layer.BlendClippedElements) {
-                  var bb = document.createElement('canvas');
-                  var bbctx = bb.getContext('2d');
-                  bb.width = layer.Width;
-                  bb.height = layer.Height;
-                  draw(bbctx, layer.Canvas, 0, 0, 1, 'source-over');
-                  for (var i = 0; i < layer.clip.length; ++i) {
-                     var child = layer.clip[i];
-                     if (!child.visibleInput.checked || child.Opacity == 0 || !child.Canvas) {
-                        continue;
-                     }
-                     draw(bbctx, child.Canvas, child.X - layer.X, child.Y - layer.Y, child);
-                  }
-                  draw(bbctx, layer.Canvas, 0, 0, 1, 'destination-in');
-                  draw(ctx, bb, layer.X, layer.Y, layer);
-               } else {
-                  draw(ctx, layer.Canvas, layer.X, layer.Y, layer);
-                  for (var i = 0; i < layer.clip.length; ++i) {
-                     var child = layer.clip[i];
-                     if (!child.visibleInput.checked || child.Opacity == 0 || !child.Canvas) {
-                        continue;
-                     }
-                     var bb = document.createElement('canvas');
-                     var bbctx = bb.getContext('2d');
-                     bb.width = child.Width;
-                     bb.height = child.Height;
-                     draw(bbctx, child.Canvas, 0, 0, 1, 'copy');
-                     draw(bbctx, layer.Canvas, layer.X - child.X, layer.Y - child.Y, 1, 'destination-in');
-                     draw(ctx, bb, child.X, child.Y, child);
-                  }
-               }
-            } else {
-               draw(ctx, layer.Canvas, layer.X, layer.Y, layer);
+   function drawLayer(ctx, layer, x, y, opacity, blendMode) {
+      if (!layer.visibleInput.checked || opacity == 0) {
+         return false;
+      }
+      var bb = layer.Buffer;
+      var bbctx = bb.getContext('2d');
+
+      clear(bbctx);
+      if (layer.Child.length) {
+         for (var i = 0, child; i < layer.Child.length; ++i) {
+            child = layer.Child[i];
+            if (!child.Clipping) {
+               drawLayer(bbctx, child, -layer.X, -layer.Y, child.Opacity, child.BlendMode);
             }
          }
-         for (var i = 0; i < layer.Layer.length; ++i) {
-            r(ctx, layer.Layer[i]);
-         }
+      } else if (layer.Canvas) {
+         draw(bbctx, layer.Canvas, 0, 0, 255, 'source-over');
       }
+
+      if (layer.MaskCanvas) {
+         draw(
+            bbctx,
+            layer.MaskCanvas,
+            layer.MaskX - layer.X,
+            layer.MaskY - layer.Y,
+            255,
+            layer.MaskDefaultColor ? 'destination-out' : 'destination-in'
+         );
+      }
+
+      if (!layer.clip.length) {
+         draw(ctx, bb, x + layer.X, y + layer.Y, opacity, blendMode);
+         return true;
+      }
+
+      var cbb = layer.ClippingBuffer;
+      var cbbctx = cbb.getContext('2d');
+
+      if (layer.BlendClippedElements) {
+         clear(cbbctx);
+         draw(cbbctx, bb, 0, 0, 255, 'source-over');
+         var changed = false;
+         for (var i = 0, child; i < layer.clip.length; ++i) {
+            child = layer.clip[i];
+            changed = drawLayer(
+               cbbctx,
+               child, -layer.X, -layer.Y,
+               child.Opacity,
+               child.BlendMode
+            ) || changed;
+         }
+         if (changed) {
+            draw(cbbctx, bb, 0, 0, 255, 'destination-in');
+         }
+         draw(ctx, cbb, x + layer.X, y + layer.Y, opacity, blendMode);
+         return true;
+      }
+
+      // this is minor code path.
+      // it is only used when "Blend Clipped Layers as Group" is unchecked in Photoshop's Layer Style dialog.
+      draw(ctx, bb, x + layer.X, y + layer.Y, opacity, blendMode);
+      clear(cbbctx);
+      for (var i = 0, child; i < layer.clip.length; ++i) {
+         child = layer.clip[i];
+         if (!drawLayer(cbbctx, child, -layer.X, -layer.Y, 255, 'source-over')) {
+            continue;
+         }
+         draw(cbbctx, bb, 0, 0, 255, 'destination-in');
+         draw(ctx, cbb, x + layer.X, y + layer.Y, child.Opacity, child.BlendMode);
+         clear(cbbctx);
+      }
+      return true;
+   }
+
+   function render(canvas, root) {
+      canvas.width = root.Width;
+      canvas.height = root.Height;
+
+      var s = Date.now();
       var ctx = canvas.getContext('2d');
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
       if (root.invertInput.checked) {
          ctx.translate(canvas.width, 0);
          ctx.scale(-1, 1);
       }
-      for (var i = 0; i < root.Layer.length; ++i) {
-         r(ctx, root.Layer[i]);
+      for (var i = 0, layer; i < root.Child.length; ++i) {
+         layer = root.Child[i];
+         if (!layer.Clipping) {
+            drawLayer(ctx, layer, 0, 0, layer.Opacity, layer.BlendMode);
+         }
       }
       ctx.restore();
+      console.log("rendering: " + (Date.now() - s));
+
+      var scale = 1;
+      if (scale != 1) {
+         s = Date.now();
+         downScaleCanvas(canvas, canvas, scale);
+         console.log("resize: " + (Date.now() - s));
+      }
+   }
+
+   function linearDodge(d, s, w, h, alpha) {
+      var sr, sg, sb, sa, dr, dg, db, da;
+      var a1, a2, a3, r, g, b, a;
+      for (var i = 0, len = w * h << 2; i < len; i += 4) {
+         sr = s[i], sg = s[i + 1], sb = s[i + 2], sa = (s[i + 3] * alpha * 32897) >> 23;
+         dr = d[i], dg = d[i + 1], db = d[i + 2], da = d[i + 3];
+
+         a = sa * 32897;
+         a1 = (a * da) >> 23;
+         a2 = (a * (255 - da)) >> 23;
+         a3 = ((8388735 - a) * da) >> 23;
+         a = a1 + a2 + a3;
+         d[i + 3] = a;
+         if (a) {
+            r = sr + dr;
+            g = sg + dg;
+            b = sb + db;
+
+            d[i] = (r * a1 + sr * a2 + dr * a3) / a;
+            d[i + 1] = (g * a1 + sg * a2 + dg * a3) / a;
+            d[i + 2] = (b * a1 + sb * a2 + db * a3) / a;
+         }
+      }
+   }
+
+   function colorDodge(d, s, w, h, alpha) {
+      var sr, sg, sb, sa, dr, dg, db, da;
+      var a1, a2, a3, r, g, b, a;
+      for (var i = 0, len = w * h << 2; i < len; i += 4) {
+         sr = s[i], sg = s[i + 1], sb = s[i + 2], sa = (s[i + 3] * alpha * 32897) >> 23;
+         dr = d[i], dg = d[i + 1], db = d[i + 2], da = d[i + 3];
+
+         a = sa * 32897;
+         a1 = (a * da) >> 23;
+         a2 = (a * (255 - da)) >> 23;
+         a3 = ((8388735 - a) * da) >> 23;
+         a = a1 + a2 + a3;
+         d[i + 3] = a;
+         if (a) {
+            r = sr == 255 ? 255 : dr == 0 ? 0 : dr * 255 / (255 - sr);
+            g = sg == 255 ? 255 : dg == 0 ? 0 : dg * 255 / (255 - sg);
+            b = sb == 255 ? 255 : db == 0 ? 0 : db * 255 / (255 - sb);
+
+            d[i] = (r * a1 + sr * a2 + dr * a3) / a;
+            d[i + 1] = (g * a1 + sg * a2 + dg * a3) / a;
+            d[i + 2] = (b * a1 + sb * a2 + db * a3) / a;
+         }
+      }
+   }
+
+   function blend(dest, src, dx, dy, sw, sh, alpha, blendMode) {
+      var sx = 0;
+      var sy = 0;
+      if (dx >= dest.width || dy >= dest.height || dx + sw < 0 || dy + sh < 0 || alpha == 0) {
+         return;
+      }
+      if (sw > src.width) {
+         sw = src.width;
+      }
+      if (sh > src.height) {
+         sh = src.height;
+      }
+      if (dx < 0) {
+         sw += dx;
+         sx -= dx;
+         dx = 0;
+      }
+      if (dy < 0) {
+         sh += dy;
+         sy -= dy;
+         dy = 0;
+      }
+      if (dx + sw > dest.width) {
+         sw = dest.width - dx;
+      }
+      if (dy + sh > dest.height) {
+         sh = dest.height - dy;
+      }
+      var dctx = dest.getContext('2d');
+      var imgData = dctx.getImageData(dx, dy, sw, sh);
+      var d = imgData.data;
+      var s = src.getContext('2d').getImageData(sx, sy, sw, sh).data;
+      switch (blendMode) {
+         case 'linear-dodge':
+            linearDodge(d, s, sw, sh, alpha);
+            break;
+         case 'color-dodge':
+            colorDodge(d, s, sw, sh, alpha);
+            break;
+      }
+      dctx.putImageData(imgData, dx, dy);
+   }
+
+   // this code is based on http://jsfiddle.net/gamealchemist/kpQyE/14/
+   // changes are:
+   //   added alpha-channel support
+   //   avoid "optimized too many times" in chrome
+   function downScaleCanvas(dest, src, scale) {
+      var sw = src.width,
+         sh = src.height,
+         tw = Math.floor(src.width * scale),
+         th = Math.floor(src.height * scale);
+      var sbuf = src.getContext('2d').getImageData(0, 0, sw, sh).data,
+         tbuf = new Float32Array(4 * sw * sh);
+
+      calc(tbuf, sbuf, scale, sw, sh, tw, th);
+
+      dest.width = tw;
+      dest.height = th;
+
+      var ctx = dest.getContext('2d');
+      var imgData = ctx.getImageData(0, 0, tw, th);
+      finalize(imgData.data, tbuf);
+      ctx.putImageData(imgData, 0, 0);
+      return;
+
+      // convert float32 array into a UInt8Clamped Array
+      function finalize(bb, fb) {
+         for (var i = 0, len = fb.length, ma; i < len; i += 4) {
+            if (fb[i + 3] == 0) {
+               continue;
+            }
+            ma = 255 / fb[i + 3];
+            bb[i] = fb[i] * ma | 0;
+            bb[i + 1] = fb[i + 1] * ma | 0;
+            bb[i + 2] = fb[i + 2] * ma | 0;
+            bb[i + 3] = fb[i + 3] | 0;
+         }
+      }
+
+      function calc(tbuf, sbuf, scale, sw, sh, tw, th) {
+         var sqScale = scale * scale; // square scale = area of source pixel within target
+         var sx = 0,
+            sy = 0,
+            sIndex = 0; // source x,y, index within source array
+         var tx = 0,
+            ty = 0,
+            yIndex = 0,
+            tIndex = 0,
+            tIndex2 = 0; // target x,y, x,y index within target array
+         var tX = 0,
+            tY = 0; // rounded tx, ty
+         var w = 0,
+            nw = 0,
+            wx = 0,
+            nwx = 0,
+            wy = 0,
+            nwy = 0; // weight / next weight x / y
+         // weight is weight of current source point within target.
+         // next weight is weight of current source point within next target's point.
+         var crossX = false; // does scaled px cross its current px right border ?
+         var crossY = false; // does scaled px cross its current px bottom border ?
+         var sR = 0,
+            sG = 0,
+            sB = 0,
+            sA = 0;
+
+         for (sy = 0; sy < sh; sy++) {
+            ty = sy * scale; // y src position within target
+            tY = 0 | ty; // rounded : target pixel's y
+            yIndex = (tY * tw) << 2; // line index within target array
+            crossY = (tY != (0 | ty + scale));
+            if (crossY) { // if pixel is crossing botton target pixel
+               wy = (tY + 1 - ty); // weight of point within target pixel
+               nwy = (ty + scale - tY - 1); // ... within y+1 target pixel
+            }
+            for (sx = 0; sx < sw; sx++, sIndex += 4) {
+               tx = sx * scale; // x src position within target
+               tX = 0 | tx; // rounded : target pixel's x
+               tIndex = yIndex + (tX << 2); // target pixel index within target array
+               crossX = (tX != (0 | tx + scale));
+               if (crossX) { // if pixel is crossing target pixel's right
+                  wx = (tX + 1 - tx); // weight of point within target pixel
+                  nwx = (tx + scale - tX - 1); // ... within x+1 target pixel
+               }
+               sR = sbuf[sIndex]; // retrieving r,g,b for curr src px.
+               sG = sbuf[sIndex + 1];
+               sB = sbuf[sIndex + 2];
+               sA = sbuf[sIndex + 3];
+               if (sA == 0) {
+                  continue;
+               }
+               if (sA < 255) {
+                  // x * 32897 >> 23 == x / 255
+                  sR = (sR * sA * 32897) >> 23;
+                  sG = (sG * sA * 32897) >> 23;
+                  sB = (sB * sA * 32897) >> 23;
+               }
+
+               if (!crossX && !crossY) { // pixel does not cross
+                  // just add components weighted by squared scale.
+                  tbuf[tIndex] += sR * sqScale;
+                  tbuf[tIndex + 1] += sG * sqScale;
+                  tbuf[tIndex + 2] += sB * sqScale;
+                  tbuf[tIndex + 3] += sA * sqScale;
+               } else if (crossX && !crossY) { // cross on X only
+                  w = wx * scale;
+                  // add weighted component for current px
+                  tbuf[tIndex] += sR * w;
+                  tbuf[tIndex + 1] += sG * w;
+                  tbuf[tIndex + 2] += sB * w;
+                  tbuf[tIndex + 3] += sA * w;
+                  // add weighted component for next (tX+1) px
+                  nw = nwx * scale;
+                  tbuf[tIndex + 4] += sR * nw;
+                  tbuf[tIndex + 5] += sG * nw;
+                  tbuf[tIndex + 6] += sB * nw;
+                  tbuf[tIndex + 7] += sA * nw;
+               } else if (crossY && !crossX) { // cross on Y only
+                  w = wy * scale;
+                  // add weighted component for current px
+                  tbuf[tIndex] += sR * w;
+                  tbuf[tIndex + 1] += sG * w;
+                  tbuf[tIndex + 2] += sB * w;
+                  tbuf[tIndex + 3] += sA * w;
+                  // add weighted component for next (tY+1) px
+                  tIndex2 = tIndex + (tw << 2);
+                  nw = nwy * scale;
+                  tbuf[tIndex2] += sR * nw;
+                  tbuf[tIndex2 + 1] += sG * nw;
+                  tbuf[tIndex2 + 2] += sB * nw;
+                  tbuf[tIndex2 + 3] += sA * nw;
+               } else { // crosses both x and y : four target points involved
+                  // add weighted component for current px
+                  w = wx * wy;
+                  tbuf[tIndex] += sR * w;
+                  tbuf[tIndex + 1] += sG * w;
+                  tbuf[tIndex + 2] += sB * w;
+                  tbuf[tIndex + 3] += sA * w;
+                  // for tX + 1; tY px
+                  nw = nwx * wy;
+                  tbuf[tIndex + 4] += sR * nw; // same for x
+                  tbuf[tIndex + 5] += sG * nw;
+                  tbuf[tIndex + 6] += sB * nw;
+                  tbuf[tIndex + 7] += sA * nw;
+                  // for tX ; tY + 1 px
+                  tIndex2 = tIndex + (tw << 2);
+                  nw = wx * nwy;
+                  tbuf[tIndex2] += sR * nw; // same for mul
+                  tbuf[tIndex2 + 1] += sG * nw;
+                  tbuf[tIndex2 + 2] += sB * nw;
+                  tbuf[tIndex2 + 3] += sA * nw;
+                  // for tX + 1 ; tY +1 px
+                  nw = nwx * nwy;
+                  tbuf[tIndex2 + 4] += sR * nw; // same for both x and y
+                  tbuf[tIndex2 + 5] += sG * nw;
+                  tbuf[tIndex2 + 6] += sB * nw;
+                  tbuf[tIndex2 + 7] += sA * nw;
+               }
+            } // end for sx
+         } // end for sy
+      }
    }
 
    function buildTree(root, redraw) {
@@ -278,12 +593,12 @@
                   layer.clip[i].li.classList.add('psdtool-hidden-by-clipping');
                }
             }
-            for (var i = 0; i < layer.Layer.length; ++i) {
-               r(layer.Layer[i]);
+            for (var i = 0; i < layer.Child.length; ++i) {
+               r(layer.Child[i]);
             }
          }
-         for (var i = 0; i < root.Layer.length; ++i) {
-            r(root.Layer[i]);
+         for (var i = 0; i < root.Child.length; ++i) {
+            r(root.Child[i]);
          }
       }
 
@@ -291,13 +606,18 @@
          var clip = [];
          for (var i = layers.length - 1; i >= 0; --i) {
             var layer = layers[i];
-            registerClippingGroup(layer.Layer);
+            registerClippingGroup(layer.Child);
             if (layer.Clipping) {
                clip.unshift(layer);
                layer.clip = [];
             } else {
-               for (var j = 0; j < clip.length; ++j) {
-                  clip[j].clippedBy = layer;
+               if (clip.length) {
+                  for (var j = 0; j < clip.length; ++j) {
+                     clip[j].clippedBy = layer;
+                  }
+                  layer.ClippingBuffer = document.createElement('canvas');
+                  layer.ClippingBuffer.width = layer.Buffer.width;
+                  layer.ClippingBuffer.height = layer.Buffer.height;
                }
                layer.clip = clip;
                clip = [];
@@ -311,8 +631,8 @@
 
          var prop = buildLayerProp(layer, parentLayer);
          var children = document.createElement('ul');
-         for (var i = layer.Layer.length - 1; i >= 0; --i) {
-            r(children, layer.Layer[i], layer);
+         for (var i = layer.Child.length - 1; i >= 0; --i) {
+            r(children, layer.Child[i], layer);
          }
 
          var li = document.createElement('li');
@@ -357,11 +677,11 @@
       root.id = 'r'
       var ul = document.createElement('ul');
       ul.id = 'layer-tree';
-      for (var i = root.Layer.length - 1; i >= 0; --i) {
-         r(ul, root.Layer[i], root);
+      for (var i = root.Child.length - 1; i >= 0; --i) {
+         r(ul, root.Child[i], root);
       }
 
-      registerClippingGroup(root.Layer);
+      registerClippingGroup(root.Child);
 
       var set = {};
       var radios = ul.querySelectorAll('.psdtool-layer-visible[type=radio]');
@@ -458,5 +778,26 @@
       return div;
    }
 
+   function detectBrokenColorDodge() {
+      var img = new Image();
+      img.src = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAGUlEQVQI1wXBAQEAAAgCIOz/5TJI20UGhz5D2wX8PWbkFQAAAABJRU5ErkJggg==";
+      img.onload = function() {
+         var c = document.createElement('canvas');
+         c.width = 257;
+         c.height = 256;
+
+         var ctx = c.getContext('2d');
+         ctx.fillStyle = "rgb(255, 255, 255)";
+         ctx.fillRect(0, 0, c.width, c.height);
+         ctx.globalAlpha = 0.5;
+         ctx.globalCompositeOperation = 'color-dodge';
+         ctx.drawImage(img, 0, 0);
+
+         var c = ctx.getImageData(0, 0, 1, 1);
+         hasBrokenColorDodge = c.data[0] < 128;
+      }
+   }
+
+   detectBrokenColorDodge();
    document.addEventListener('DOMContentLoaded', init, false);
 })();

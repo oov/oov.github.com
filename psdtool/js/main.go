@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"image"
 	"image/color"
 	"io"
 	"log"
@@ -16,7 +17,7 @@ import (
 type root struct {
 	Width     int
 	Height    int
-	Layer     []layer
+	Child     []layer
 	processed int
 	progress  func(l *layer)
 }
@@ -31,17 +32,22 @@ type layer struct {
 	Visible               bool
 	X                     int
 	Y                     int
-	Width                 int
-	Height                int
+	Canvas                *js.Object
+	MaskX                 int
+	MaskY                 int
+	MaskCanvas            *js.Object
+	MaskDefaultColor      int
+	Buffer                *js.Object
 	Folder                bool
 	FolderOpen            bool
-	Canvas                *js.Object
-	MaskCanvas            *js.Object
-	Layer                 []layer
+	Child                 []layer
 	psdLayer              *psd.Layer
+	width                 int
+	height                int
 }
 
 func main() {
+	// psd.Debug = log.New(os.Stdout, "psd: ", log.Lshortfile)
 	js.Global.Set("parsePSD", parsePSD)
 }
 
@@ -58,47 +64,57 @@ func (r *root) buildLayer(l *layer) error {
 	l.Clipping = l.psdLayer.Clipping
 	l.BlendClippedElements = l.psdLayer.BlendClippedElements
 	l.Visible = l.psdLayer.Visible()
-	l.X = l.psdLayer.Rect.Min.X
-	l.Y = l.psdLayer.Rect.Min.Y
-	l.Width = l.psdLayer.Rect.Dx()
-	l.Height = l.psdLayer.Rect.Dy()
 	l.Folder = l.psdLayer.Folder()
 	l.FolderOpen = l.psdLayer.FolderIsOpen()
 
 	if l.psdLayer.HasImage() && l.psdLayer.Rect.Dx()*l.psdLayer.Rect.Dy() > 0 {
-		if l.Canvas, err = createCanvas(l.psdLayer); err != nil {
+		if l.Canvas, err = createImageCanvas(l.psdLayer); err != nil {
 			return err
 		}
 	}
-	if _, ok := l.psdLayer.Channel[-2]; ok && l.psdLayer.Mask.Rect.Dx()*l.psdLayer.Mask.Rect.Dy() > 0 {
+	if _, ok := l.psdLayer.Channel[-2]; ok && l.psdLayer.Mask.Enabled() && l.psdLayer.Mask.Rect.Dx()*l.psdLayer.Mask.Rect.Dy() > 0 {
 		if l.MaskCanvas, err = createMaskCanvas(l.psdLayer); err != nil {
 			return err
 		}
+		l.MaskX = l.psdLayer.Mask.Rect.Min.X
+		l.MaskY = l.psdLayer.Mask.Rect.Min.Y
+		l.MaskDefaultColor = l.psdLayer.Mask.DefaultColor
 	}
 
 	r.processed++
 	r.progress(l)
 
+	rect := l.psdLayer.Rect
 	for i := range l.psdLayer.Layer {
-		l.Layer = append(l.Layer, layer{psdLayer: &l.psdLayer.Layer[i]})
-		if err = r.buildLayer(&l.Layer[i]); err != nil {
+		l.Child = append(l.Child, layer{psdLayer: &l.psdLayer.Layer[i]})
+		if err = r.buildLayer(&l.Child[i]); err != nil {
 			return err
 		}
+		rect = rect.Union(image.Rect(
+			l.Child[i].X,
+			l.Child[i].Y,
+			l.Child[i].X+l.Child[i].width,
+			l.Child[i].Y+l.Child[i].height,
+		))
 	}
+	l.X = rect.Min.X
+	l.Y = rect.Min.Y
+	l.width = rect.Dx()
+	l.height = rect.Dy()
+	l.Buffer = createCanvas(l.width, l.height)
+
 	return nil
 }
 
-func createCanvas(l *psd.Layer) (*js.Object, error) {
+func createImageCanvas(l *psd.Layer) (*js.Object, error) {
 	if l.Picker.ColorModel() != color.NRGBAModel {
 		return nil, errors.New("Unsupported color mode")
 	}
 
 	w, h := l.Rect.Dx(), l.Rect.Dy()
-	cvs := js.Global.Get("document").Call("createElement", "canvas")
-	cvs.Set("width", w)
-	cvs.Set("height", h)
+	cvs := createCanvas(w, h)
 	ctx := cvs.Call("getContext", "2d")
-	imgData := ctx.Call("createImageData", w, h)
+	imgData := ctx.Call("getImageData", 0, 0, w, h)
 	data := imgData.Get("data")
 
 	var ofsd, ofss, x, y, sx, dx int
@@ -141,25 +157,41 @@ func createMaskCanvas(l *psd.Layer) (*js.Object, error) {
 	}
 
 	w, h := l.Mask.Rect.Dx(), l.Mask.Rect.Dy()
-	cvs := js.Global.Get("document").Call("createElement", "canvas")
-	cvs.Set("width", w)
-	cvs.Set("height", h)
+	cvs := createCanvas(w, h)
 	ctx := cvs.Call("getContext", "2d")
-	imgData := ctx.Call("createImageData", w, h)
+	imgData := ctx.Call("getImageData", 0, 0, w, h)
 	data := imgData.Get("data")
 
 	var ofsd, ofss, x, y, sx, dx int
 	mp := m.Data
-	for y = 0; y < h; y++ {
-		ofss = y * w
-		ofsd = ofss << 2
-		for x = 0; x < w; x++ {
-			sx, dx = ofss+x, ofsd+x<<2
-			data.SetIndex(dx+3, mp[sx])
+	if l.Mask.DefaultColor == 0 {
+		for y = 0; y < h; y++ {
+			ofss = y * w
+			ofsd = ofss << 2
+			for x = 0; x < w; x++ {
+				sx, dx = ofss+x, ofsd+x<<2
+				data.SetIndex(dx+3, mp[sx])
+			}
+		}
+	} else {
+		for y = 0; y < h; y++ {
+			ofss = y * w
+			ofsd = ofss << 2
+			for x = 0; x < w; x++ {
+				sx, dx = ofss+x, ofsd+x<<2
+				data.SetIndex(dx+3, 255-mp[sx])
+			}
 		}
 	}
 	ctx.Call("putImageData", imgData, 0, 0)
 	return cvs, nil
+}
+
+func createCanvas(width, height int) *js.Object {
+	cvs := js.Global.Get("document").Call("createElement", "canvas")
+	cvs.Set("width", width)
+	cvs.Set("height", height)
+	return cvs
 }
 
 func countLayers(l []psd.Layer) int {
@@ -215,8 +247,8 @@ func parse(b []byte, progress func(phase int, progress float64, l *layer)) (*roo
 	}
 	r.progress = func(l *layer) { progress(1, float64(r.processed)/float64(numLayers), l) }
 	for i := range psdImg.Layer {
-		r.Layer = append(r.Layer, layer{psdLayer: &psdImg.Layer[i]})
-		r.buildLayer(&r.Layer[i])
+		r.Child = append(r.Child, layer{psdLayer: &psdImg.Layer[i]})
+		r.buildLayer(&r.Child[i])
 	}
 	e = time.Now().UnixNano()
 	log.Println("Build Canvas:", (e-s)/1e6)

@@ -242,11 +242,72 @@
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
    }
 
+   function calculateNextState(layer, opacity) {
+      if (!layer.visibleInput.checked || opacity == 0) {
+         return false;
+      }
+
+      var state = "";
+      if (layer.Child.length) {
+         for (var i = 0, child; i < layer.Child.length; ++i) {
+            child = layer.Child[i];
+            if (!child.Clipping) {
+               if (calculateNextState(child, child.Opacity / 255)) {
+                  state += child.nextState + '+';
+               }
+            }
+         }
+         if (state != "") {
+            state = state.substring(0, state.length - 1);
+         }
+      } else if (layer.Canvas) {
+         state = layer.id;
+      }
+
+      if (layer.MaskCanvas) {
+         state += '|lm';
+      }
+
+      if (!layer.clip.length) {
+         layer.nextState = state;
+         return true;
+      }
+
+      state += '|cm' + (layer.BlendClippedElements ? '1' : '0') + ':';
+      if (layer.BlendClippedElements) {
+         for (var i = 0, child; i < layer.clip.length; ++i) {
+            child = layer.clip[i];
+            if (calculateNextState(child, child.Opacity / 255)) {
+               state += child.nextState + '+';
+            }
+         }
+         layer.nextState = state.substring(0, state.length - 1);
+         return true;
+      }
+
+      // we cannot cache in this mode
+      state += Date.now() + '_' + Math.random() + ':';
+
+      for (var i = 0, child; i < layer.clip.length; ++i) {
+         child = layer.clip[i];
+         if (calculateNextState(child, 1)) {
+            state += child.nextState + '+';
+         }
+      }
+      layer.nextState = state.substring(0, state.length - 1);
+      return true;
+   }
+
    function drawLayer(ctx, layer, x, y, opacity, blendMode) {
       if (!layer.visibleInput.checked || opacity == 0) {
          return false;
       }
       var bb = layer.Buffer;
+      if (layer.currentState == layer.nextState) {
+         draw(ctx, bb, x + layer.X, y + layer.Y, opacity, blendMode);
+         return true;
+      }
+
       var bbctx = bb.getContext('2d');
 
       clear(bbctx);
@@ -274,6 +335,7 @@
 
       if (!layer.clip.length) {
          draw(ctx, bb, x + layer.X, y + layer.Y, opacity, blendMode);
+         layer.currentState = layer.nextState;
          return true;
       }
 
@@ -296,7 +358,11 @@
          if (changed) {
             draw(cbbctx, bb, 0, 0, 1, 'destination-in');
          }
+         // swap buffer for next time
+         layer.ClippingBuffer = bb;
+         layer.Buffer = cbb;
          draw(ctx, cbb, x + layer.X, y + layer.Y, opacity, blendMode);
+         layer.currentState = layer.nextState;
          return true;
       }
 
@@ -313,55 +379,83 @@
          draw(ctx, cbb, x + layer.X, y + layer.Y, child.Opacity / 255, child.BlendMode);
          clear(cbbctx);
       }
+      layer.currentState = layer.nextState;
       return true;
    }
 
    function render(canvas, root) {
-      canvas.width = root.Width;
-      canvas.height = root.Height;
-
       var s = Date.now();
-      var ctx = canvas.getContext('2d');
-      ctx.save();
-      if (root.invertInput.checked) {
-         ctx.translate(canvas.width, 0);
-         ctx.scale(-1, 1);
-      }
+
+      var state = "";
       for (var i = 0, layer; i < root.Child.length; ++i) {
          layer = root.Child[i];
          if (!layer.Clipping) {
-            drawLayer(ctx, layer, 0, 0, layer.Opacity / 255, layer.BlendMode);
+            if (calculateNextState(layer, layer.Opacity / 255)) {
+               state += layer.nextState + '+';
+            }
          }
       }
-      ctx.restore();
+      if (state != "") {
+         state = state.substring(0, state.length - 1);
+      }
+      root.nextState = state;
+
+      var bb = root.Buffer;
+      if (root.currentState != root.nextState) {
+         var bbctx = bb.getContext('2d');
+         clear(bbctx);
+         for (var i = 0, layer; i < root.Child.length; ++i) {
+            layer = root.Child[i];
+            if (!layer.Clipping) {
+               drawLayer(bbctx, layer, -root.RealX, -root.RealY, layer.Opacity / 255, layer.BlendMode);
+            }
+         }
+         root.currentState = root.nextState;
+      }
       console.log("rendering: " + (Date.now() - s));
+
 
       var scale = 1;
       var px = parseInt(root.maxPixels.value, 10);
+      var w = root.Buffer.width;
+      var h = root.Buffer.height;
       switch (root.fixedSide.value) {
          case 'w':
-            if (canvas.width > px) {
-               scale = px / canvas.width;
+            if (w > px) {
+               scale = px / w;
             }
             break;
          case 'h':
-            if (canvas.height > px) {
-               scale = px / canvas.height;
+            if (h > px) {
+               scale = px / h;
             }
             break;
       }
-      if (scale != 1) {
-         if (canvas.width * scale < 1 || canvas.height * scale < 1) {
-            if (canvas.width > canvas.height) {
-               scale = 1 / canvas.height;
-            } else {
-               scale = 1 / canvas.width;
-            }
+      if (w * scale < 1 || h * scale < 1) {
+         if (w > h) {
+            scale = 1 / h;
+         } else {
+            scale = 1 / w;
          }
-         s = Date.now();
-         downScaleCanvas(canvas, canvas, scale);
-         console.log("resize: " + (Date.now() - s));
       }
+
+      s = Date.now();
+      canvas.width = 0 | root.Width * scale;
+      canvas.height = 0 | root.Height * scale;
+      root.seqDl.disabled = true;
+      downScaleCanvas(root.Buffer, scale, function(phase, c) {
+         console.log("scaling: " + (Date.now() - s) + '(phase:' + phase + ')');
+         var ctx = canvas.getContext('2d');
+         clear(ctx);
+         ctx.save();
+         if (root.invertInput.checked) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+         }
+         ctx.drawImage(c, 0 | root.RealX * scale, 0 | root.RealY * scale);
+         ctx.restore();
+         root.seqDl.disabled = phase != 1;
+      });
    }
 
    function linearDodge(d, s, w, h, alpha) {
@@ -461,160 +555,60 @@
    // changes are:
    //   added alpha-channel support
    //   avoid "optimized too many times" in chrome
-   function downScaleCanvas(dest, src, scale) {
-      var sw = src.width,
-         sh = src.height,
-         tw = Math.floor(src.width * scale),
-         th = Math.floor(src.height * scale);
-      var sbuf = src.getContext('2d').getImageData(0, 0, sw, sh).data,
-         tbuf = new Float32Array(4 * sw * sh);
-
-      calc(tbuf, sbuf, scale, sw, sh, tw, th);
-
-      dest.width = tw;
-      dest.height = th;
-
-      var ctx = dest.getContext('2d');
-      var imgData = ctx.getImageData(0, 0, tw, th);
-      finalize(imgData.data, tbuf);
-      ctx.putImageData(imgData, 0, 0);
-      return;
-
-      // convert float32 array into a UInt8Clamped Array
-      function finalize(bb, fb) {
-         for (var i = 0, len = fb.length, ma; i < len; i += 4) {
-            if (fb[i + 3] == 0) {
-               continue;
-            }
-            ma = 255 / fb[i + 3];
-            bb[i] = fb[i] * ma | 0;
-            bb[i + 1] = fb[i + 1] * ma | 0;
-            bb[i + 2] = fb[i + 2] * ma | 0;
-            bb[i + 3] = fb[i + 3] | 0;
-         }
+   //   use web worker
+   function downScaleCanvas(src, scale, callback) {
+      if (scale == 1) {
+         callback(1, src);
+         return;
       }
 
-      function calc(tbuf, sbuf, scale, sw, sh, tw, th) {
-         var sqScale = scale * scale; // square scale = area of source pixel within target
-         var sx = 0,
-            sy = 0,
-            sIndex = 0; // source x,y, index within source array
-         var tx = 0,
-            ty = 0,
-            yIndex = 0,
-            tIndex = 0,
-            tIndex2 = 0; // target x,y, x,y index within target array
-         var tX = 0,
-            tY = 0; // rounded tx, ty
-         var w = 0,
-            nw = 0,
-            wx = 0,
-            nwx = 0,
-            wy = 0,
-            nwy = 0; // weight / next weight x / y
-         // weight is weight of current source point within target.
-         // next weight is weight of current source point within next target's point.
-         var crossX = false; // does scaled px cross its current px right border ?
-         var crossY = false; // does scaled px cross its current px bottom border ?
-         var sR = 0,
-            sG = 0,
-            sB = 0,
-            sA = 0;
+      var sw = src.width,
+         sh = src.height,
+         dw = Math.floor(src.width * scale),
+         dh = Math.floor(src.height * scale);
 
-         for (sy = 0; sy < sh; sy++) {
-            ty = sy * scale; // y src position within target
-            tY = 0 | ty; // rounded : target pixel's y
-            yIndex = (tY * tw) << 2; // line index within target array
-            crossY = (tY != (0 | ty + scale));
-            if (crossY) { // if pixel is crossing botton target pixel
-               wy = (tY + 1 - ty); // weight of point within target pixel
-               nwy = (ty + scale - tY - 1); // ... within y+1 target pixel
-            }
-            for (sx = 0; sx < sw; sx++, sIndex += 4) {
-               tx = sx * scale; // x src position within target
-               tX = 0 | tx; // rounded : target pixel's x
-               tIndex = yIndex + (tX << 2); // target pixel index within target array
-               crossX = (tX != (0 | tx + scale));
-               if (crossX) { // if pixel is crossing target pixel's right
-                  wx = (tX + 1 - tx); // weight of point within target pixel
-                  nwx = (tx + scale - tX - 1); // ... within x+1 target pixel
-               }
-               sR = sbuf[sIndex]; // retrieving r,g,b for curr src px.
-               sG = sbuf[sIndex + 1];
-               sB = sbuf[sIndex + 2];
-               sA = sbuf[sIndex + 3];
-               if (sA == 0) {
-                  continue;
-               }
-               if (sA < 255) {
-                  // x * 32897 >> 23 == x / 255
-                  sR = (sR * sA * 32897) >> 23;
-                  sG = (sG * sA * 32897) >> 23;
-                  sB = (sB * sA * 32897) >> 23;
-               }
+      var dest = document.createElement('canvas');
+      dest.width = dw;
+      dest.height = dh;
+      var ctx = dest.getContext('2d');
+      ctx.drawImage(src, 0, 0, sw, sh, 0, 0, dw, dh);
+      callback(0, dest);
 
-               if (!crossX && !crossY) { // pixel does not cross
-                  // just add components weighted by squared scale.
-                  tbuf[tIndex] += sR * sqScale;
-                  tbuf[tIndex + 1] += sG * sqScale;
-                  tbuf[tIndex + 2] += sB * sqScale;
-                  tbuf[tIndex + 3] += sA * sqScale;
-               } else if (crossX && !crossY) { // cross on X only
-                  w = wx * scale;
-                  // add weighted component for current px
-                  tbuf[tIndex] += sR * w;
-                  tbuf[tIndex + 1] += sG * w;
-                  tbuf[tIndex + 2] += sB * w;
-                  tbuf[tIndex + 3] += sA * w;
-                  // add weighted component for next (tX+1) px
-                  nw = nwx * scale;
-                  tbuf[tIndex + 4] += sR * nw;
-                  tbuf[tIndex + 5] += sG * nw;
-                  tbuf[tIndex + 6] += sB * nw;
-                  tbuf[tIndex + 7] += sA * nw;
-               } else if (crossY && !crossX) { // cross on Y only
-                  w = wy * scale;
-                  // add weighted component for current px
-                  tbuf[tIndex] += sR * w;
-                  tbuf[tIndex + 1] += sG * w;
-                  tbuf[tIndex + 2] += sB * w;
-                  tbuf[tIndex + 3] += sA * w;
-                  // add weighted component for next (tY+1) px
-                  tIndex2 = tIndex + (tw << 2);
-                  nw = nwy * scale;
-                  tbuf[tIndex2] += sR * nw;
-                  tbuf[tIndex2 + 1] += sG * nw;
-                  tbuf[tIndex2 + 2] += sB * nw;
-                  tbuf[tIndex2 + 3] += sA * nw;
-               } else { // crosses both x and y : four target points involved
-                  // add weighted component for current px
-                  w = wx * wy;
-                  tbuf[tIndex] += sR * w;
-                  tbuf[tIndex + 1] += sG * w;
-                  tbuf[tIndex + 2] += sB * w;
-                  tbuf[tIndex + 3] += sA * w;
-                  // for tX + 1; tY px
-                  nw = nwx * wy;
-                  tbuf[tIndex + 4] += sR * nw; // same for x
-                  tbuf[tIndex + 5] += sG * nw;
-                  tbuf[tIndex + 6] += sB * nw;
-                  tbuf[tIndex + 7] += sA * nw;
-                  // for tX ; tY + 1 px
-                  tIndex2 = tIndex + (tw << 2);
-                  nw = wx * nwy;
-                  tbuf[tIndex2] += sR * nw; // same for mul
-                  tbuf[tIndex2 + 1] += sG * nw;
-                  tbuf[tIndex2 + 2] += sB * nw;
-                  tbuf[tIndex2 + 3] += sA * nw;
-                  // for tX + 1 ; tY +1 px
-                  nw = nwx * nwy;
-                  tbuf[tIndex2 + 4] += sR * nw; // same for both x and y
-                  tbuf[tIndex2 + 5] += sG * nw;
-                  tbuf[tIndex2 + 6] += sB * nw;
-                  tbuf[tIndex2 + 7] += sA * nw;
-               }
-            } // end for sx
-         } // end for sy
+      var w = new Worker('js/resizer.js');
+      w.onmessage = function(e) {
+         var ctx = dest.getContext('2d');
+         var imgData = ctx.getImageData(0, 0, dw, dh);
+         downScaleCanvasFinalize(
+            imgData.data,
+            new Uint8Array(e.data.buf),
+            dw,
+            dh,
+            imgData.width
+         );
+         ctx.putImageData(imgData, 0, 0);
+         callback(1, dest);
+      };
+      var sbuf = src.getContext('2d').getImageData(0, 0, sw, sh);
+      w.postMessage({
+         scale: scale,
+         buf: sbuf.data.buffer,
+         width: sbuf.width,
+         height: sbuf.height
+      }, [sbuf.data.buffer]);
+   }
+
+   function downScaleCanvasFinalize(d, s, w, h, dw) {
+      w *= 4;
+      dw *= 4;
+      for (var y = 0, sl = 0, dl = 0; y < h; ++y) {
+         sl = w * y;
+         dl = dw * y;
+         for (var x = 0; x < w; x += 4) {
+            d[dl + x] = s[sl + x];
+            d[dl + x + 1] = s[sl + x + 1];
+            d[dl + x + 2] = s[sl + x + 2];
+            d[dl + x + 3] = s[sl + x + 3];
+         }
       }
    }
 
@@ -686,7 +680,9 @@
 
       root.seqDlPrefix = document.getElementById('seq-dl-prefix');
       root.seqDlPrefix.value = root.name.replace(/\.psd$/ig, '') + '_';
-      document.getElementById('seq-dl').addEventListener('click', function(e) {
+
+      root.seqDl = document.getElementById('seq-dl');
+      root.seqDl.addEventListener('click', function(e) {
          var prefix = root.seqDlPrefix.value;
          var numElem = document.getElementById('seq-dl-num');
          var num = parseInt(numElem.value, 10);

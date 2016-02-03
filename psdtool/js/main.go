@@ -1,4 +1,5 @@
 //go:generate gopherjs build -m -o psdtool.js
+//go:generate go run blend.go
 
 package main
 
@@ -72,7 +73,11 @@ func (r *root) buildLayer(l *layer) error {
 	} else {
 		l.Name = l.psdLayer.Name
 	}
-	l.BlendMode = l.psdLayer.BlendMode.String()
+	if l.psdLayer.Folder() {
+		l.BlendMode = l.psdLayer.SectionDividerSetting.BlendMode.String()
+	} else {
+		l.BlendMode = l.psdLayer.BlendMode.String()
+	}
 	l.Opacity = l.psdLayer.Opacity
 	l.Clipping = l.psdLayer.Clipping
 	l.BlendClippedElements = l.psdLayer.BlendClippedElements
@@ -128,20 +133,23 @@ func countLayers(l []psd.Layer) int {
 	return r
 }
 
-func (r *root) Build(img *psd.PSD, progress func(processed, total int, l *layer)) {
+func (r *root) Build(img *psd.PSD, progress func(processed, total int, l *layer)) error {
 	numLayers := countLayers(img.Layer)
 	r.Width = img.Config.Rect.Dx()
 	r.Height = img.Config.Rect.Dy()
 	r.progress = func(l *layer) { progress(r.processed, numLayers, l) }
 	for i := range img.Layer {
 		r.Child = append(r.Child, layer{psdLayer: &img.Layer[i]})
-		r.buildLayer(&r.Child[i])
+		if err := r.buildLayer(&r.Child[i]); err != nil {
+			return err
+		}
 	}
 	r.RealX = r.realRect.Min.X
 	r.RealY = r.realRect.Min.Y
 	r.RealWidth = r.realRect.Dx()
 	r.RealHeight = r.realRect.Dy()
 	r.Buffer = createCanvas(r.RealWidth, r.RealHeight)
+	return nil
 }
 
 func createImageCanvas(l *psd.Layer) (*js.Object, error) {
@@ -269,9 +277,11 @@ func parse(b []byte, progress func(phase int, progress float64, l *layer)) (*roo
 
 	s = time.Now().UnixNano()
 	var r root
-	r.Build(psdImg, func(processed, total int, l *layer) {
+	if err = r.Build(psdImg, func(processed, total int, l *layer) {
 		progress(1, float64(processed)/float64(total), l)
-	})
+	}); err != nil {
+		return nil, err
+	}
 	e = time.Now().UnixNano()
 	log.Println("Build Canvas:", (e-s)/1e6)
 	return &r, nil

@@ -245,11 +245,11 @@
    }
 
    function extractFilePrefixFromUrl(url) {
-      var name = url.replace(/#[^#]*$/, '');
-      name = name.replace(/\?[^?]*$/, '');
-      name = name.replace(/^.*?([^\/]+)$/, '$1');
-      name = name.replace(/\..*$/i, '') + '_';
-      return name;
+      url = url.replace(/#[^#]*$/, '');
+      url = url.replace(/\?[^?]*$/, '');
+      url = url.replace(/^.*?([^\/]+)$/, '$1');
+      url = url.replace(/\..*$/i, '') + '_';
+      return url;
    }
 
    function parse(progress, obj) {
@@ -280,6 +280,7 @@
             ui.maxPixels.value = psd.Height;
             ui.seqDlPrefix.value = psd.name;
             ui.seqDlNum.value = 0;
+            ui.showReadme.style.display = psd.Readme != '' ? 'block' : 'none';
             psdRoot = psd;
             ui.redraw();
             deferred.resolve();
@@ -480,10 +481,11 @@
       }
       console.log("rendering: " + (Date.now() - s));
 
+      var autoTrim = false; // experimental feature
       var scale = 1;
       var px = parseInt(ui.maxPixels.value, 10);
-      var w = psd.Buffer.width;
-      var h = psd.Buffer.height;
+      var w = autoTrim ? psd.Buffer.width : psd.Width;
+      var h = autoTrim ? psd.Buffer.height : psd.Height;
       switch (ui.fixedSide.value) {
          case 'w':
             if (w > px) {
@@ -505,8 +507,8 @@
       }
 
       s = Date.now();
-      canvas.width = 0 | psd.Width * scale;
-      canvas.height = 0 | psd.Height * scale;
+      canvas.width = 0 | w * scale;
+      canvas.height = 0 | h * scale;
       ui.seqDl.disabled = true;
       downScaleCanvas(psd.Buffer, scale, function(phase, c) {
          console.log("scaling: " + (Date.now() - s) + '(phase:' + phase + ')');
@@ -517,7 +519,7 @@
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
          }
-         ctx.drawImage(c, 0 | psd.RealX * scale, 0 | psd.RealY * scale);
+         ctx.drawImage(c, autoTrim ? 0 : 0 | psd.RealX * scale, autoTrim ? 0 : 0 | psd.RealY * scale);
          ctx.restore();
          ui.seqDl.disabled = phase != 1;
       });
@@ -536,14 +538,14 @@
 
       var sw = src.width,
          sh = src.height,
-         dw = Math.floor(src.width * scale),
-         dh = Math.floor(src.height * scale);
+         dw = Math.floor(sw * scale),
+         dh = Math.floor(sh * scale);
 
       var dest = document.createElement('canvas');
       dest.width = dw;
       dest.height = dh;
       var ctx = dest.getContext('2d');
-      ctx.drawImage(src, 0, 0, sw, sh, 0, 0, dw, dh);
+      ctx.drawImage(src, 0, 0, sw, sh, 0, 0, Math.round(sw * scale), Math.round(sh * scale));
       callback(0, dest);
 
       var w = new Worker('js/resizer.js');
@@ -646,6 +648,13 @@
          }), filename);
          return true;
       };
+
+      ui.showReadme = document.getElementById('show-readme');
+      ui.showReadme.addEventListener('click', function(e) {
+         var w = window.open("", "Readme - PSDTool");
+         w.document.body.innerHTML = '<pre></pre>';
+         w.document.querySelector('pre').textContent = psdRoot.Readme;
+      }, false);
 
       ui.invertInput = document.getElementById('invert-input');
       ui.invertInput.addEventListener('click', function(e) {

@@ -3,17 +3,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PSDTool</title>
-<link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+<link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto+Condensed:700'>
+<link href="css/3rd.min.css" rel="stylesheet">
 <link href="css/main.css" rel="stylesheet">
 
 <body>
 	<div id="file-open-ui" class="container">
 		<div class="row">
-			<div class="col-xs-12">
+			<div class="col-sm-8 text-nowrap">
 				<h1>
 					PSDTool
 					<small>Photoshop 形式のファイルを読み込む奴</small>
 				</h1>
+			</div>
+			<div class="col-sm-4 text-nowrap psdtool-header">
+				<a href="manual.html" target="manual" class="btn btn-default">説明書</a>
+				<a href="https://docs.google.com/forms/d/1JUpD_i4e1-lR1CbeE_Lf_83jYGfzVNYg1Bjjn3hOAIw/viewform?entry.484637404=%E4%B8%8D%E5%85%B7%E5%90%88%E3%81%8C%E3%81%82%E3%81%A3%E3%81%9F&entry.1692870994" target="report" class="btn btn-default">報告フォーム</a>
 			</div>
 		</div>
 		<div id="error-report-ui" class="row">
@@ -21,7 +27,7 @@
 				<div id="error-message" class="alert alert-danger" role="alert"></div>
 			</div>
 		</div>
-		<div class="row">
+		<div class="row psdtool-loading">
 			<div class="col-sm-6">
 				<div class="panel panel-primary">
 					<div class="panel-heading">
@@ -30,11 +36,13 @@
 					<div class="panel-body">
 						<div id="dropzone">
 							<p>
-								<input type="file" id="inputfile" accept=".psd,.zip">
+								<input type="file" accept=".psd,.zip">
 							</p>
-							<p>ここにファイルをドロップしても読み込めます。</p>
+							<p><small>
+								ここに <a href="manual.html#supported-filetype" target="manual">PSD ファイル</a> や <a href="manual.html#supported-filetype-zip" target="manual">ZIP ファイル</a> をドラッグ＆ドロップしても読み込めます。
+							</small></p>
 							<dl id="additional-options">
-								<dt>オプション <small><a href="#manual-options">詳細</a></small></dt>
+								<dt>オプション <small><a href="manual.html#feature-options" target="manual">詳細</a></small></dt>
 								<dd class="checkbox">
 									<label for="option-auto-trim">
 										<input type="checkbox" id="option-auto-trim"> 自動トリミング
@@ -42,7 +50,7 @@
 								</dd>
 								<dd class="checkbox">
 									<label for="option-safe-mode">
-										<input type="checkbox" id="option-safe-mode"> 独自機能を無効化
+										<input type="checkbox" id="option-safe-mode"> 独自拡張機能を無効化
 									</label>
 								</dd>
 							</dl>
@@ -63,13 +71,13 @@
 							</p>
 							<small>
 								<p>
-									こちらのサンプルは<a href="https://twitter.com/hrowl">水梟る</a>さんが投稿されている 「<a href="http://seiga.nicovideo.jp/seiga/im5467479">さとうささら立ち絵集5</a>」を許可をいただき PSDTool 用のサンプルファイルとして使用させて頂いているものです。
+									サンプルの PSD ファイルは<a href="http://seiga.nicovideo.jp/seiga/im5467479" target="_blank">こちらからダウンロードできます</a>。
 								</p>
 								<p>
-									<a href="http://seiga.nicovideo.jp/seiga/im5467479">ニコニコ静画で配布されている *.psd ファイル</a> は PSDTool が持つ <a href="#original-feature">独自拡張機能</a> を使用したサンプルにもなっています。
+									こちらのイラストは <a href="https://twitter.com/hrowl" target="_blank">水梟る</a>さんの「<a href="http://seiga.nicovideo.jp/seiga/im5467479" target="_blank">さとうささら立ち絵集5</a>」を許可をいただき使用させて頂いています。
 								</p>
 								<p>
-									「<a href="http://satosasara.com/">さとうささら</a>」はトーク・ソング対応音声合成ソフトウェア「<a href="http://cevio.jp/">CeVIO Creative Studio</a>」のキャラクターです。
+									「<a href="http://satosasara.com/" target="_blank">さとうささら</a>」はトーク・ソング対応音声合成ソフトウェア「<a href="http://cevio.jp/" target="_blank">CeVIO Creative Studio</a>」のキャラクターです。
 								</p>
 							</small>
 						</div>
@@ -78,290 +86,210 @@
 			</div>
 		</div>
 		<div class="row">
-			<div class="col-xs-12">
+			<div class="col-sm-6">
 				<div class="panel panel-default">
 					<div class="panel-heading">
-						<h2 class="panel-title">AviUtl で「拡張編集」プラグインをお使いの方へ</h2>
+						<h2 class="panel-title">独自拡張機能対応 PSD ファイルを探す</h2>
+					</div>
+					<div class="panel-body">
+						<p>ニコニコ静画には <a href="http://seiga.nicovideo.jp/clip/1704637" target="_blank">PSDTool の独自拡張機能に対応したイラスト</a>が投稿されており、これらは画像編集ソフト開くより快適に操作できます。</p>
+						<p>独自拡張機能は<a href="manual.html#original-feature" target="manual">レイヤー名の先頭に１文字を加えるだけ</a>で簡単に使えます。</p>
+					</div>
+				</div>
+			</div>
+			<div class="col-sm-6">
+				<div class="panel panel-default">
+					<div class="panel-heading">
+						<h2 class="panel-title">AviUtl と「拡張編集」のお供に</h2>
 					</div>
 					<div class="panel-body">
 						<p>
-							テスト公開中の AviUtl 用プラグイン 「ごちゃまぜドロップス（<a href="https://twitter.com/oovch/status/699737247260606465" target="_blank">30秒紹介動画</a> / <a href="https://github.com/oov/aviutl_oledd#readme" target="_blank">README</a> / <a href="https://github.com/oov/aviutl_oledd/releases"
-										target="_blank">ダウンロード</a>）」 を使うと、PSDTool から直接「拡張編集」ウィンドウに画像をドラッグ＆ドロップして読み込むことができるようになります。
+							PSDTool から直接「拡張編集」に画像をドラッグ＆ドロップして読み込むことができるようになるプラグインがあります。
+						</p>
+						<p>
+							ごちゃまぜドロップス | <a href="https://twitter.com/oovch/status/699737247260606465" target="_blank">30秒紹介動画</a> / <a href="https://github.com/oov/aviutl_oledd#readme" target="_blank">README</a> / <a href="https://github.com/oov/aviutl_oledd/releases" target="_blank">ダウンロード</a>
 						</p>
 					</div>
+				</div>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-xs-12">
+				<div class="well text-center">
+					<small>
+						Created by <a href="https://github.com/oov/psdtool" target="_blank">oov</a> | Powered by <a href="http://www.gopherjs.org/" target="_blank">GopherJS</a> | Please use a <a href="https://whatbrowser.org/" target="_blank">modern browser</a> | Please listen to <a href="https://www.youtube.com/watch?v=SldjqJz3thA" target="_blank">my song</a>
+					</small>
 				</div>
 			</div>
 		</div>
 	</div>
 	<div id="file-loading-ui" class="container">
 		<div class="progress">
-			<div id="progress-bar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
-				<span class="psdtool-progress-bar-caption sr-only"></span>
-			</div>
+			<div id="progress-bar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
 		</div>
 		<div id="progress-caption"></div>
 	</div>
-	<div id="manual" class="container">
-		<h1>説明書</h1>
-		<h2>PSDTool とは？</h2>
-		<p><img src="img/about.png" class="img-thumbnail" alt="PSDTool のスクリーンショット"></p>
-		<p>
-			PSDTool は Photoshop 形式(*.psd) のファイルをブラウザで読み込んでレイヤーの表示／非表示を切り替えたり、合成された画像に名前を付けて保存したりできるツールです。
-			<br><strong>「ファイルを選択して開く」で読み込む画像はサーバーには一切送信されず完全にブラウザだけで処理される</strong>ため、プライベートな用途にも使用できます。
-		</p>
-		<p>
-			このツールは「イラストを描く人がレイヤーの表示／非表示を切り替えた様々なパターンを PNG で書き出したものを配布する」といった時間の浪費と手間を減らすために、 また配布されているイラストを利用したい人がソフトウェアを何も用意しなくても最新のブラウザさえあれば *.psd ファイルを扱えるようにすることを目的に作りました。
-		</p>
-		<p>
-			Photoshop 形式は sai、CLIP STUDIO PAINT、openCanvas、Krita、メディバンペイント、FireAlpaca など様々なペイントソフトで保存可能な共通の保存フォーマットです。
-			<br>これを機に、是非 Photoshop 形式での配布を検討してみてください。
-		</p>
-		<h3>PSDTool 紹介用動画</h3>
-		<p>PSDTool の概要などを簡単に紹介した動画です。</p>
-		<ul>
-			<li><a target="_blank" href="http://www.nicovideo.jp/watch/sm28057966">【ニコニコ動画】ささらさん誕生日おめでとう、立ち絵用のツール作ったよ / CeVIO投稿祭</a></li>
-			<li><a target="_blank" href="http://www.nicovideo.jp/watch/sm28114677">【ニコニコ動画】立ち絵支援ツール PSDTool 紹介2</a></li>
-		</ul>
-		<h2>動作環境</h2>
-		<p>
-			Microsoft Edge / Google Chrome / Mozilla Firefox で動作確認しています。
-			<br>Mac を持っていないので Apple Safari ではテストしていません。
-		</p>
-		<p>
-			Microsoft Internet Explorer 11 でも動作しますが、少し重いことがあります。
-		</p>
-		<p>
-			ブラウザは常に最新版をお使いください。
-		</p>
-		<h2>機能の説明</h2>
-		<h3 id="manual-options">オプション</h3>
-		<p>ファイルを開く際に、いくつかのオプションが設定可能です。</p>
-		<dl>
-			<dt>自動トリミング</dt>
-			<dd>
-				<p>
-					有効にすると PSD ファイルに存在する全てのレイヤーを表示したとしても使われることがない、完全な余白のみを削ります。
-					<br>ある瞬間に表示している内容でトリミングするわけではないので、「ウサギの耳」「翼」のように一部または全部の方向へ突出するようなレイヤーが存在する場合、その分の余白は常に確保されます。
-				</p>
-				<p><img src="img/trim-sample.png" class="img-thumbnail" alt="自動トリミングの使用サンプル"></p>
-				<p>
-					上記サンプルでは、自動トリミングありの場合は左右はギリギリまでカットされ、上部は「左向き用・主線」レイヤーを表示するための余白が数ピクセルだけ残っています。
-				</p>
-				<p>
-					なお縮小する場合、縮小後のサイズを例えば 320px としても上記サンプルのように余白の有無によって画像の縮小率が変わってきます。
-					余白を上手く使って複数の PSD ファイル間で同程度のサイズ感になるよう整えられている場合などもあるため、自動トリミングの使用には注意が必要です。
-				</p>
-			</dd>
-			<dt>独自機能を無効化</dt>
-			<dd>
-				<p>
-					これは PSDTool での使用を想定していない PSD ファイルを読む際に使う機能で、<a href="#original-feature">PSDTool が持つ独自機能</a> が認識されないようにします。
-					レイヤー名が独自機能と衝突してしまい、レイヤー表示切替のチェックボックスがラジオボタンになったりが消えてしまっている場合に有用です。
-				</p>
-			</dd>
-		</dl>
-		<h3>操作画面</h3>
-		<p>ファイルを開くと画面の上部には以下の様なインターフェイスが現れます。</p>
-		<p><img src="img/head.png" class="img-thumbnail" alt="PSDTool の画面上部にあるインターフェイス"></p>
-		<dl>
-			<dt>左右反転</dt>
-			<dd>
-				<p>
-					画像を左右反転します。
-					<br>文字やアクセサリー、髪型や服の装飾などのように、反転すると問題がある場合もあるため使用には注意が必要です。
-				</p>
-			</dd>
-			<dt>縮小</dt>
-			<dd>
-				<p>
-					読み込んだ画像が大きすぎる場合、ここで保存前に縮小することができます。
-					<br>縦か横のどちらかの最大ピクセル数を指定すると、その大きさに合わせてサイズが決定されます。この設定によって元のサイズより画像が拡大されることはありません。
-				</p>
-			</dd>
-			<dt>連番DL</dt>
-			<dd>
-				<p>
-					画像を通し番号付きで保存するための機能です。
-					<br>スクリーンショットのように入力欄がそれぞれ「file_」「0」の状態で「.png」ボタンを押すと「file_0000.png」というファイル名で保存され、そのまま同じボタンを押す度に数字が足されていきます。
-				</p>
-			</dd>
-		</dl>
-		<h2>読み込める *.psd ファイル</h2>
-		<ul>
-			<li>RGB カラー（8bit/チャンネル）以外には対応していません。</li>
-			<li>
-				レイヤーの合成モードは 通過（グループレイヤーのみ）、通常、比較（暗）、乗算、焼き込みカラー、焼き込み（リニア）、カラー比較（暗）、比較（明）、スクリーン、覆い焼きカラー、覆い焼き（リニア）、カラー比較（明）、オーバーレイ、ソフトライト、ハードライト、ビビッドライト、リニアライト、ピンライト、ハードミックス、差の絶対値、除外、減算、除算、色相、彩度、カラー、輝度 に対応しています。
-				<br>ただし合成モードの種類やブラウザによっては JavaScript による実装が使用されるため、処理速度が遅いことがあります。
-			</li>
-			<li>テキストレイヤー、調整レイヤー、シェイプレイヤーなどには対応していません。</li>
-			<li>
-				ZIP ファイルに入っている PSD ファイルも直接読めます。
-				<br>複数の PSD ファイルがひとつの ZIP ファイルに格納されている場合、最初に見つかったものが展開されます。
-				<br>また、もし ZIP ファイル内にテキストファイルが存在する場合、レイヤー一覧の一番上に表示用ボタンが現れます。
-			</li>
-		</ul>
-		<h3>ダイレクト読み込み</h3>
-		<p>
-			以下に示す条件のいずれかを満たすことで、PSDTool はあなたのサイトにあるファイルを読むことができます。
-			<br>あなたのサイトに配置された配布用の ZIP ファイルをこの仕組みで直接開くこともできます。
-		</p>
-		<ul>
-			<li>
-				（推奨）読み込むファイルを置くサーバと同じドメイン上に HTML ファイルを設置し、その HTML をブラウザで表示可能なこと。
-				<ul>
-					<li>これは自作の HTML ファイルが設置できるサービスの多くで使用可能な方法です。</li>
-					<li>以下の手順に従いアップロードした HTML ファイルをブラウザで開くと、ダイレクト読み込みで使用可能なリンクが表示されます。</li>
-					<ol>
-						<li><a class="btn btn-default" href="remote.html" download="remote.html">HTML ファイル をダウンロード（右クリック保存）</a></li>
-						<li>HTML ファイルをテキストエディタで開き、設定を記入</li>
-						<li>読み込むファイルと同じサーバにアップロード</li>
-					</ol>
+	<div id="main" class="split-pane fixed-left">
+		<div id="side-container" class="split-pane-component">
+			<div id="side-head">
+				<button class="btn btn-sm btn-info btn-block" id="show-readme">Readme を読む</button>
+				<ul id="side-tab" class="nav nav-tabs">
+					<li role="presentation" class="active"><a href="#layer-tree-pane" aria-controls="レイヤー" role="tab" data-toggle="tab">レイヤー</a></li>
+					<li role="presentation"><a href="#favs-pane" aria-controls="お気に入り" role="tab" data-toggle="tab">お気に入り</a></li>
 				</ul>
-			</li>
-			<li>
-				読みたいファイルの HTTP レスポンスのヘッダで Access-Control-Allow-Origin の値に「https://oov.github.io」「http://oov.github.io」「*」などが含まれていること。
-				<ul>
-					<li>これは主にレンタルサーバーで .htaccess や PHP などのスクリプトを使える環境の場合などに使用可能な方法です。</li>
-					<li>設定方法については「Access-Control-Allow-Origin htaccess」などで検索してください。</li>
-					<li>
-						適切に設置できている場合 &quot;https://oov.github.io/psdtool/#load:&quot; + encodeURIComponent(設置URL) のアドレスで読み込むことができます。
-						<br>読み込みたいファイルの配置場所が https ではなく http の場合、PSDTool の URL も http にする必要があります。
-					</li>
-				</ul>
-			</li>
-		</ul>
-		<h2 id="original-feature">独自機能</h2>
-		<p>
-			レイヤー名の先頭に特定の記号を付けることで、レイヤーの表示／非表示の使い勝手を改善することができます。
-			<br>これらの機能を使用しても画像編集ソフトで開く際には今まで通り使用でき、編集が不便になることはありません。
-		</p>
-		<h3>アスタリスク「*」</h3>
-		<p><img src="img/asterisk.png" class="img-rounded" alt="アスタリスクの使用例"></p>
-		<p>
-			レイヤー名の先頭に半角のアスタリスク「*」をつけると、選択項目がチェックボックスでははなくラジオボタンになります。
-			<br>ラジオボタンは親のグループレイヤー（画像例では「口」）に所属するようになります。
-		</p>
-		<ul>
-			<li>グループ内でひとつのみ選択できるため、二種類の表情が同時に表示されたりするのを防ぐことができます。</li>
-			<li>項目を選択すると前に選択されていた項目の選択解除も行われるため、切り替えのクリック数が半分で済みます。</li>
-			<li>ラジオボタンは選択解除できませんが、親のグループレイヤーで非表示にもできます。</li>
-			<li>最後にクリックしたラジオボタンはキーボードの上下キーで選択を切り替えることもできます。</li>
-		</ul>
-		<p>
-			ラジオボタン内のレイヤーが複数表示されたまま *.psd ファイルが保存されていた場合、その中で一番上のものがデフォルト表示されます。
-		</p>
-		<h3>エクスクラメーションマーク「!」</h3>
-		<p><img src="img/exclamation.png" class="img-rounded" alt="エクスクラメーションマークの使用例"></p>
-		<p>
-			レイヤー名の先頭に半角のエクスクラメーションマーク「!」をつけると、選択項目からチェックボックスが消えます。
-			<br>チェックボックスがない項目は表示状態になり、非表示にできなくなります。
-		</p>
-		<ul>
-			<li>必須のパーツが外れるのを防ぐことができます。</li>
-			<li>選択項目を減らせるので、使う時に迷う要素を画面から減らすことができます。</li>
-		</ul>
-		<p>
-			強制表示設定にしたレイヤーを非表示にして *.psd ファイルを保存しても、PSDTool で表示する際は強制的に表示状態になります。
-		</p>
-		<h2>変更履歴</h2>
-		<dl>
-			<dt>2016-02-18</dt>
-			<dd>オプション「自動トリミング」「独自機能を無効化」を追加</dd>
-			<dt>2016-02-17</dt>
-			<dd>操作性の改善</dd>
-			<dd>バグ修正</dd>
-			<dt>2016-02-15</dt>
-			<dd>バグ修正</dd>
-			<dt>2016-02-07</dt>
-			<dd>バグ修正</dd>
-			<dt>2016-02-06</dt>
-			<dd>縮小のサイズ計算が誤っていたのを修正</dd>
-			<dd>ZIP ファイルを開いた時はテキストファイルを表示できる機能を追加</dd>
-			<dd>ダイレクト読み込み機能を追加</dd>
-			<dt>2016-02-05</dt>
-			<dd>ZIP 圧縮された PSD ファイルの読み込みに対応</dd>
-			<dt>2016-02-04</dt>
-			<dd>合成モード「通過（グループレイヤーのみ）」「通常」「比較（暗）」「乗算」「焼き込みカラー」「焼き込み（リニア）」「カラー比較（暗）」「比較（明）」「スクリーン」「覆い焼きカラー」「覆い焼き（リニア）」「カラー比較（明）」「オーバーレイ」「ソフトライト」「ハードライト」「ビビッドライト」「リニアライト」「ピンライト」「ハードミックス」「差の絶対値」「除外」「減算」「除算」「色相」「彩度」「カラー」「輝度」の実装を追加</dd>
-			<dt>2016-02-02</dt>
-			<dd>操作性の改善</dd>
-			<dt>2016-02-01</dt>
-			<dd>描画負荷の軽減</dd>
-			<dd>縮小処理中にUIが硬直しないように</dd>
-			<dt>2016-01-29</dt>
-			<dd>透過領域でアニメーション</dd>
-			<dd>縮小機能を追加</dd>
-			<dd>連番ダウンロード機能を追加</dd>
-			<dd>バグ修正</dd>
-			<dt>2016-01-28</dt>
-			<dd>合成モード「覆い焼き（リニア）」に対応</dd>
-			<dd>レイヤーマスク、ベクトルマスクに対応</dd>
-			<dd>バグ修正</dd>
-			<dt>2016-01-26</dt>
-			<dd>クリッピングマスクに対応</dd>
-			<dd>読み込み状況の進捗表示</dd>
-			<dd>バグ修正</dd>
-			<dt>2016-01-22</dt>
-			<dd>初版</dd>
-		</dl>
-
-		<div class="well text-center">
-			<small>
-				Created by <a href="https://github.com/oov/psdtool" target="_blank">oov</a> | Powered by <a href="http://www.gopherjs.org/" target="_blank">GopherJS</a> | Please use a <a href="https://whatbrowser.org/" target="_blank">modern browser</a> | Please listen to <a href="https://www.youtube.com/watch?v=SldjqJz3thA" target="_blank">my song</a>
-			</small>
-		</div>
-	</div>
-	<div id="main">
-		<div id="side-container">
-			<button class="btn btn-info btn-block" id="show-readme">Readme を読む</button>
-			<ul id="layer-tree"></ul>
-		</div>
-		<div id="main-container">
-			<div id="misc-ui" class="container-fluid">
-				<div class="row">
-					<div class="col-sm-3 col-md-2">
-						<label for="invert-input">
-							<input id="invert-input" type="checkbox"> 左右反転
-						</label>
+			</div>
+			<div id="side-body">
+				<div class="tab-content">
+					<div role="tabpanel" class="tab-pane active" id="layer-tree-pane">
+						<ul id="layer-tree"></ul>
 					</div>
-					<div class="col-sm-6 col-md-4">
-						<div class="form-inline">
-							<div class="form-group">
-								<label for="fixed-side">縮小</label>
-								<select class="form-control" id="fixed-side">
-									<option value="h" selected="selected">縦</option>
-									<option value="w">横</option>
-								</select>
-								<label class="sr-only" for="max-size">サイズ</label>
-								<div class="input-group">
-									<div class="input-group-addon">最大</div>
-									<input type="text" class="form-control" id="max-pixels" inputmode="numeric" value="1200">
-									<div class="input-group-addon">px</div>
-								</div>
-							</div>
+					<div role="tabpanel" class="tab-pane" id="favs-pane">
+						<div id="pfv-dropzone2">
+							<div id="favorite-tree" data-root-name="お気に入り"></div>
 						</div>
-					</div>
-					<div class="col-sm-12 col-md-6">
-						<div class="form-inline">
-							<div class="form-group">
-								<label for="seq-dl-prefix">連番DL</label>
-								<input id="seq-dl-prefix" type="text" class="form-control" value="file_">
-								<label class="sr-only" for="seq-dl-num">番号</label>
-								<input type="number" class="form-control" id="seq-dl-num" inputmode="numeric" value="0">
-								<button id="seq-dl" class="btn btn-primary">.png</button>
+						<div id="favorite-toolbar" class="clearfix">
+							<div class="btn-toolbar pull-right" role="toolbar" aria-label="お気に入り編集">
+								<div class="btn-group" role="group" aria-label="新規">
+									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-item="#favorite-tree" title="現在のレイヤー表示をお気に入りに追加(Ctrl + B / Option + B)" data-caption="現在のレイヤー表示をお気に入りに追加"><span class="glyphicon glyphicon-star"></span></button>
+									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-folder="#favorite-tree" title="新規フォルダー(Ctrl + D / Option + D)" data-caption="新規フォルダーの追加"><span class="glyphicon glyphicon-folder-open"></span></button>
+								</div>
+								<div class="btn-group" role="group" aria-label="編集">
+									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-rename="#favorite-tree" title="名前の変更(F2)"><span class="glyphicon glyphicon-pencil"></span></button>
+									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-remove="#favorite-tree" title="削除"><span class="glyphicon glyphicon-remove"></span></button>
+								</div>
+								<div class="btn-group" role="group" aria-label="その他">
+									<div class="btn-group" role="group">
+										<button type="button" class="btn btn-default btn-sm dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+											<span class="glyphicon glyphicon-menu-hamburger"></span>
+											<span class="caret"></span>
+										</button>
+										<ul class="dropdown-menu dropdown-menu-right">
+											<li><a href="#" data-toggle="modal" data-target="#import-dialog"><span class="glyphicon glyphicon-open-file"></span> インポート</a></li>
+											<li><a href="#" data-toggle="modal" data-target="#export-dialog"><span class="glyphicon glyphicon-save-file"></span> エクスポート</a></li>
+										</ul>
+									</div>
+								</div>
 							</div>
 						</div>
 					</div>
 				</div>
 			</div>
+		</div>
+		<div id="splitter" class="split-pane-divider"></div>
+		<div id="main-container" class="split-pane-component">
+			<div id="misc-ui">
+				<div class="form-inline">
+					<div class="form-group psdtool-ui-item">
+						<div class="checkbox">
+							<label for="invert-input">
+								<input id="invert-input" type="checkbox"> 左右反転
+							</label>
+						</div>
+					</div>
+					<div class="form-group psdtool-ui-item">
+						<label for="fixed-side">縮小</label>
+						<select class="form-control" id="fixed-side">
+							<option value="h" selected="selected">縦</option>
+							<option value="w">横</option>
+						</select>
+						<div class="input-group">
+							<div class="input-group-addon">最大</div>
+							<input type="text" class="form-control" id="max-pixels" inputmode="numeric" value="1200">
+							<div class="input-group-addon">px</div>
+						</div>
+					</div>
+					<div class="form-group psdtool-ui-item">
+						<label for="seq-dl-prefix">連番DL</label>
+						<input id="seq-dl-prefix" type="text" class="form-control" value="file_">
+						<label class="sr-only" for="seq-dl-num">番号</label>
+						<input type="number" class="form-control" id="seq-dl-num" inputmode="numeric" value="0">
+						<button id="seq-dl" class="btn btn-primary">.png</button>
+					</div>
+				</div>
+			</div>
 			<div id="preview-container">
-				<div id="preview-background"><img id="preview" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQIW2NkAAIAAAoAAggA9GkAAAAASUVORK5CYII="></div>
+				<div id="preview-background">
+					<canvas id="preview"></canvas>
+					<div id="preview-notice">お気に入りプレビュー中</div>
+				</div>
 			</div>
 		</div>
 	</div>
+
+	<div class="modal" id="import-dialog" tabindex="-1" role="dialog" aria-labelledby="import-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="immport-dialog-label">お気に入りのインポート</h4>
+				</div>
+				<div class="modal-body">
+					<dl>
+						<dt>PFV ファイルをインポート</dt>
+						<dd>
+							<div id="pfv-dropzone">
+								<p>
+									<input type="file" accept=".pfv">
+								</p>
+								<p>ここにファイルをドロップしても読み込めます。</p>
+							</div>
+						</dd>
+						<dt>最近使ったお気に入りからインポート</dt>
+						<dd>
+							<p>色付きのものは現在読み込んでいる PSD ファイルで作成されたお気に入りです。</p>
+							<div class="list-group" id="pfv-recents"></div>
+						</dd>
+					</dl>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="export-dialog" tabindex="-1" role="dialog" aria-labelledby="export-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="export-dialog-label">お気に入りのエクスポート</h4>
+				</div>
+				<div class="modal-body">
+					<p>
+						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-pfv">PFV ファイルをエクスポート</button>
+					</p>
+					<p><small>PFV ファイルはお気に入りの情報が記録されたテキストファイルで、「インポート」を使って読み込んだりエディタで開いて直接編集したりできます。</small></p>
+					<p>
+						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-zip">画像を ZIP ファイルでエクスポート</button>
+					</p>
+					<p><small>PNG ファイルと PFV ファイルを無圧縮の ZIP ファイルに書き出します。パターン数に応じて相応の時間とメモリを消費します。画像には現在の左右反転や縮小などの設定が適用されます。ただし、作成するファイルが大きすぎる（500MB以上）とダウンロードに失敗したり、挙動がおかしくなったり、作成中にブラウザがクラッシュすることがあります。</small></p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="export-progress-dialog" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false" data-show="false" aria-labelledby="export-progress-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<h4 class="modal-title" id="export-progress-dialog-label">エクスポートデータの作成中...</h4>
+				</div>
+				<div class="modal-body">
+					<div id="export-progress-dialog-progress-caption"></div>
+					<div class="progress">
+						<div id="export-progress-dialog-progress-bar" class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha256-KXn5puMvxCw+dAYznun+drMdG1IFl3agK0p/pqT9KAo= sha512-2e8qq0ETcfWRI4HJBzQiA3UoyFk6tbNyG+qSaIBZLyW9Xf3sWZHN/lxe9fTh1U45DpPf07yj94KsUHHWe4Yk1A==" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/mithril/0.2.2-rc.1/mithril.min.js"></script>
-	<script src="js/FileSaver.min.js"></script>
-	<script src="js/psdtool.js"></script>
-	<script src="js/blend.js"></script>
+	<script src="js/3rd.min.js"></script>
+	<script src="js/blend/blend.js"></script>
+	<script id="psdgo" src="js/psd/psd.js"></script>
+	<script src="js/downscaler.js"></script>
+	<script src="js/renderer.js"></script>
 	<script src="js/main.js"></script>
 </body>
 

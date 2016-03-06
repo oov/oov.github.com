@@ -1,23 +1,77 @@
 @charset "UTF-8";
 body {
    line-height: 1.8;
+   font-family: 'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W3', Meiryo, メイリオ, Osaka, 'MS PGothic', arial, helvetica, sans-serif;
 }
 .psdtool-sampleimg {
    margin-right: 8px;
+   margin-bottom: 8px;
 }
-#dropzone, #try-sample {
-   min-height: 24rem;
+h1 {
+   margin: 4rem 0 4rem;
+   font-size: 5rem;
+   font-family: 'Roboto Condensed', sans-serif;
+   letter-spacing: -1px;
+}
+h1 small {
+   font-family: 'Hiragino Kaku Gothic ProN', 'ヒラギノ角ゴ ProN W3', Meiryo, メイリオ, Osaka, 'MS PGothic', arial, helvetica, sans-serif;
+   font-size: 30%;
+   letter-spacing: 0;
+}
+.psdtool-header {
+   margin: 4rem 0;
+   line-height: 5rem;
+   text-align: right;
+}
+.psdtool-header a {
+   vertical-align: bottom;
+}
+.psdtool-loading {
+   visibility: hidden;
+   opacity: 0;
+}
+.psdtool-loaded {
+   transition: opacity 0.25s;
+   visibility: visible;
+   opacity: 1;
+}
+#manual dt {
+   margin-top: 1em;
+   margin-bottom: 0.5em;
+}
+#manual dd {
+   padding-left: 2em;
+}
+#manual h2 {
+   border-bottom: 0.25em solid #dde;
+   padding: 0 0.3em 0.1em 0;
+   margin: 6rem 0 2rem;
+   display: inline-block;
+   border-radius: 0 0 0.25em 0;
+}
+#manual h3 {
+   margin: 4rem 0 2rem;
+}
+#dropzone, #pfv-dropzone, #pfv-dropzone2, #try-sample {
+   min-height: 26rem;
    border: 1px dashed transparent;
    background-color: #fff;
 }
-#dropzone.psdtool-drop-active {
+#pfv-dropzone {
+   min-height: 8rem;
+}
+#dropzone input[type=file], #pfv-dropzone input[type=file] {
+   display: block;
+   width: 100%;
+}
+#dropzone.psdtool-drop-active, #pfv-dropzone.psdtool-drop-active, #pfv-dropzone2.psdtool-drop-active {
    border: 1px dashed #4bf;
    background-color: #def;
 }
 #additional-options {
-   margin-top: 7rem;
+   margin-top: 8rem;
 }
-#progress-bar {
+#progress-bar, #export-progress-dialog-progress-bar {
    transition: none;
 }
 #file-loading-ui {
@@ -41,19 +95,65 @@ body {
    position: absolute;
    left: 0;
    top: 0;
-   width: 20vw;
+   min-width: 32px;
+   width: 25vw;
    height: 100vh;
    overflow: auto;
    box-sizing: border-box;
    border-right: 1px solid #888;
 }
+#jstree-marker {
+   z-index: 10000;
+}
+#side-body {
+   overflow: auto;
+}
+#side-tab {
+   background: linear-gradient(to bottom, #fff 0%, #eee 100%);
+}
+#side-tab > li:first-child {
+   margin-left: 8px;
+}
+#side-tab > li > a {
+   font-size: 0.8em;
+   padding: 4px 12px;
+   margin-top: 8px;
+   user-select: none;
+   -moz-user-select: none;
+   -webkit-user-select: none;
+   -ms-user-select: none;
+   outline: 0;
+}
+#side-tab > li.active > a {
+   box-shadow: 1px -1px 2px #ddd;
+   border-top: 2px solid #9bf;
+}
+#favs-pane {
+   position: relative;
+}
+#favorite-toolbar {
+   position: absolute;
+   background: linear-gradient(to bottom, #ffffff 0%, #efefef 100%);
+   left: 0;
+   right: 0;
+   top: 0;
+   padding: 8px;
+   border-bottom: 1px solid #ddd;
+}
+.jstree-default .jstree-node {
+   margin-left: 12px;
+}
+#splitter {
+   left: 25vw;
+   width: 4px;
+}
 #main-container {
    position: absolute;
-   left: 20vw;
+   left: 25vw;
    top: 0;
    padding: 0;
    margin: 0;
-   width: 80vw;
+   right: 0;
    height: 100vh;
    overflow: hidden;
    background: #ccc;
@@ -62,13 +162,10 @@ body {
    box-sizing: border-box;
    margin: 0;
    background: #fff;
-   padding-top: 8px;
-   padding-bottom: 8px;
    border-bottom: #bbb 1px solid;
 }
-label[for=invert-input] {
-   margin-bottom: 0;
-   padding: 5px 0 0 0;
+#misc-ui .psdtool-ui-item {
+   padding: 8px 0.75em;
 }
 #fixed-side {
    padding: 0;
@@ -91,9 +188,33 @@ label[for=invert-input] {
 #preview-background {
    margin: auto;
    display: block;
+   position: relative;
    box-sizing: content-box;
    background: url(../img/transparent.gif);
    border: 1px solid #888;
+}
+#preview-background.reader {
+   background: url(../img/transparent_reader.gif);
+   border-color: #88f;
+}
+#preview-notice {
+   user-select: none;
+   -moz-user-select: none;
+   -webkit-user-select: none;
+   -ms-user-select: none;
+   cursor: default;
+   color: #008;
+   text-shadow: 1px 1px 1px #fff;
+   display: none;
+   position: absolute;
+   left: 4px;
+   top: 4px;
+   line-height: 1;
+   font-size: 1rem;
+   font-weight: bold;
+}
+#preview-background.reader #preview-notice {
+   display: block;
 }
 #preview {
    margin: auto;
@@ -135,7 +256,7 @@ label {
    height: 24px;
 }
 #layer-tree {
-   padding-left: 0;
+   padding: 8px 0 0 0;
    margin-bottom: 0;
 }
 #layer-tree ul {

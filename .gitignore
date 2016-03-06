@@ -1,0 +1,4 @@
+/psdtool/*.json
+*.ts
+*.go
+

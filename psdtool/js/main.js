@@ -25,7 +25,7 @@
         seqDlNum: null,
         favoriteToolbar: null,
         favoriteTree: null,
-        FavoriteTreeDefaultRootName: null,
+        favoriteTreeDefaultRootName: null,
         favoriteTreeChangedTimer: null,
         seqDl: null,
         exportFavoritesPFV: null,
@@ -264,8 +264,8 @@
     }
     function parse(progress, obj) {
         var deferred = m.deferred();
-        PSD.parseWorker(obj.buffer, progress, function (psd, canvasMap) {
-            deferred.resolve({ psd: psd, canvasMap: canvasMap, name: obj.name });
+        PSD.parseWorker(obj.buffer, progress, function (psd) {
+            deferred.resolve({ psd: psd, name: obj.name });
         }, function (error) { deferred.reject(error); });
         return deferred.promise;
     }
@@ -414,7 +414,7 @@
                 },
                 data: data ? data : [{
                         id: 'root',
-                        text: ui.FavoriteTreeDefaultRootName,
+                        text: ui.favoriteTreeDefaultRootName,
                         type: 'root',
                     }]
             },
@@ -563,7 +563,7 @@
         if (root && root.text) {
             return root.text;
         }
-        return ui.FavoriteTreeDefaultRootName;
+        return ui.favoriteTreeDefaultRootName;
     }
     function cleanForFilename(f) {
         return f.replace(/[\x00-\x1f\x22\x2a\x2f\x3a\x3c\x3e\x3f\x7c\x7f]+/g, '_');
@@ -673,7 +673,7 @@
         }
     }
     function initFavoriteUI() {
-        ui.FavoriteTreeDefaultRootName = document.getElementById('favorite-tree').getAttribute('data-root-name');
+        ui.favoriteTreeDefaultRootName = document.getElementById('favorite-tree').getAttribute('data-root-name');
         initFavoriteTree();
         jQuery('button[data-psdtool-tree-add-item]').on('click', function (e) {
             var jst = jQuery(this.getAttribute('data-psdtool-tree-add-item')).jstree();
@@ -1503,7 +1503,7 @@
         }
         var json = [{
                 id: 'root',
-                text: ui.FavoriteTreeDefaultRootName,
+                text: ui.favoriteTreeDefaultRootName,
                 type: 'root',
                 state: {
                     opened: true
@@ -1511,7 +1511,7 @@
                 children: []
             }];
         var setting = {
-            'root-name': ui.FavoriteTreeDefaultRootName
+            'root-name': ui.favoriteTreeDefaultRootName
         };
         var name, type, data = [], first = true, value;
         for (var i = 1; i < lines.length; ++i) {

@@ -677,6 +677,7 @@
         }
     }
     function initFavoriteUI() {
+        var _this = this;
         ui.favoriteTreeDefaultRootName = document.getElementById('favorite-tree').getAttribute('data-root-name');
         initFavoriteTree();
         jQuery('button[data-psdtool-tree-add-item]').on('click', function (e) {
@@ -775,8 +776,8 @@
         ui.exportFavoritesZIP.addEventListener('click', function (e) {
             var path = [], files = [];
             function r(children) {
-                for (var i_1 = 0, item = void 0; i_1 < children.length; ++i_1) {
-                    item = children[i_1];
+                for (var i = 0, item = void 0; i < children.length; ++i) {
+                    item = children[i];
                     path.push(cleanForFilename(item.text));
                     switch (item.type) {
                         case 'root':
@@ -805,53 +806,50 @@
             var json = ui.favoriteTree.jstree('get_json');
             r(json);
             var backup = serializeCheckState(true);
-            var w = new Worker('js/zipbuilder.js');
-            w.onmessage = function (e) {
-                if (e.data.error) {
-                    console.error(e.data.error);
-                    alert('cannot create zip archive: ' + e.data.error);
-                    ui.exportProgressDialog.modal('hide');
-                    return;
+            var z = new Zipper.Zipper();
+            var aborted = false;
+            var errorHandler = function (readableMessage, err) {
+                z.dispose(function (err) { return undefined; });
+                console.error(err);
+                if (!aborted) {
+                    alert(readableMessage + ': ' + err);
                 }
                 ui.exportProgressDialog.modal('hide');
-                saveAs(new Blob([e.data.buffer], {
-                    type: 'application/zip'
-                }), cleanForFilename(getFavoriteTreeRootName()) + '.zip');
             };
-            w.postMessage({
-                method: 'add',
-                name: 'favorites.pfv',
-                buffer: buildPFV(json)
-            });
-            var i = 0;
-            function process() {
-                if (i === files.length) {
-                    deserializeCheckState(backup);
-                    updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, 1, 'building zip...');
-                    w.postMessage({
-                        method: 'end'
-                    });
+            // it is needed to avoid alert storm when reload during exporting.
+            window.addEventListener('unload', function () { aborted = true; }, false);
+            var added = 0;
+            var addedHandler = function () {
+                if (++added < files.length + 1) {
+                    updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, added / (files.length + 1), added === 1 ? 'drawing...' : '(' + added + '/' + files.length + ') ' + decodeLayerName(files[added - 1].name));
                     return;
                 }
-                deserializeCheckState(files[i].value);
-                render(function (progress, canvas) {
-                    if (progress !== 1) {
-                        return;
-                    }
-                    var b = dataSchemeURIToArrayBuffer(canvas.toDataURL());
-                    w.postMessage({
-                        method: 'add',
-                        name: files[i].name,
-                        buffer: b
-                    }, [b]);
-                    updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, i / files.length, '(' + i + '/' + files.length + ') ' + decodeLayerName(files[i].name));
-                    ++i;
-                    setTimeout(process, 0);
-                });
-            }
-            updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, 0, 'drawing...');
+                deserializeCheckState(backup);
+                updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, 1, 'building a zip...');
+                z.generate(function (blob) {
+                    ui.exportProgressDialog.modal('hide');
+                    saveAs(blob, cleanForFilename(getFavoriteTreeRootName()) + '.zip');
+                    z.dispose(function (err) { return undefined; });
+                }, errorHandler.bind(_this, 'cannot create a zip archive'));
+            };
+            z.init(function () {
+                z.add('favorites.pfv', new Blob([buildPFV(json)], { type: 'text/plain; charset=utf-8' }), addedHandler, errorHandler.bind(_this, 'cannot write pfv to a zip archive'));
+                var i = 0;
+                var process = function () {
+                    deserializeCheckState(files[i].value);
+                    render(function (progress, canvas) {
+                        if (progress !== 1) {
+                            return;
+                        }
+                        z.add(files[i].name, new Blob([dataSchemeURIToArrayBuffer(canvas.toDataURL())], { type: 'image/png' }), addedHandler, errorHandler.bind(_this, 'cannot write png to a zip archive'));
+                        if (++i < files.length) {
+                            setTimeout(process, 0);
+                        }
+                    });
+                };
+                process();
+            }, errorHandler.bind(_this, 'cannot create a zip archive'));
             ui.exportProgressDialog.modal('show');
-            setTimeout(process, 0);
         });
     }
     function dataSchemeURIToArrayBuffer(str) {

@@ -638,7 +638,7 @@
             removeSelectedNode(jst);
             return;
         }
-        text = suggestUniqueName(jst, id, oldText);
+        text = suggestUniqueName(jst, id, text);
         if (text !== oldText) {
             jst.rename_node(id, text);
         }

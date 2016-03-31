@@ -12,16 +12,23 @@ var Zipper;
             var _this = this;
             var req = indexedDB.open(databaseName, 1);
             req.onupgradeneeded = function (e) {
-                var db = e.target.result;
-                db.createObjectStore(fileStoreName);
+                var db = req.result;
+                if (db instanceof IDBDatabase) {
+                    db.createObjectStore(fileStoreName);
+                    return;
+                }
+                throw new Error('req.result is not IDBDatabase');
             };
-            req.onerror = function (e) {
-                error(e);
-            };
+            req.onerror = function (e) { return error(e); };
             req.onsuccess = function (e) {
-                _this.db = e.target.result;
-                _this.gc(function (err) { return undefined; });
-                success();
+                var db = req.result;
+                if (db instanceof IDBDatabase) {
+                    _this.db = db;
+                    _this.gc(function (err) { return undefined; });
+                    success();
+                    return;
+                }
+                throw new Error('req.result is not IDBDatabase');
             };
         };
         Zipper.prototype.dispose = function (error) {
@@ -44,14 +51,17 @@ var Zipper;
             var req = os.openCursor(IDBKeyRange.bound(['meta', ''], ['meta', []], false, true));
             var d = new Date().getTime() - 60 * 1000;
             req.onsuccess = function (e) {
-                var cur = req.result;
-                if (!cur) {
+                var cursor = req.result;
+                if (!cursor) {
                     return;
                 }
-                if (cur.value.lastMod.getTime() < d) {
-                    _this.remove(os, cur.key[1], error);
+                if (cursor instanceof IDBCursorWithValue) {
+                    if (cursor.value.lastMod.getTime() < d) {
+                        _this.remove(os, cursor.key[1], error);
+                    }
+                    cursor.continue();
+                    return;
                 }
-                cur.advance(1);
             };
             req.onerror = error;
         };
@@ -100,9 +110,7 @@ var Zipper;
             tx.onerror = error;
             var os = tx.objectStore(fileStoreName);
             os.put({ lastMod: new Date() }, ['meta', this.id]);
-            this.receiveFiles(function (blobs) {
-                complete(_this.makeZIP(blobs));
-            }, error);
+            this.receiveFiles(function (blobs) { return complete(_this.makeZIP(blobs)); }, error);
         };
         Zipper.prototype.receiveFiles = function (success, error) {
             var _this = this;
@@ -115,9 +123,12 @@ var Zipper;
             this.fileInfos.forEach(function (fi, i) {
                 var req = os.get(['body', _this.id, i]);
                 req.onsuccess = function (e) {
-                    blobs[i] = e.target.result;
-                    if (!--reqs) {
-                        success(blobs);
+                    var result = req.result;
+                    if (result instanceof Blob) {
+                        blobs[i] = result;
+                        if (!--reqs) {
+                            success(blobs);
+                        }
                     }
                 };
                 req.onerror = error;
@@ -148,25 +159,27 @@ var Zipper;
             var reqs = 2;
             var fr = new FileReader();
             fr.onload = function (e) {
-                _this.crc = CRC32.crc32(e.target.result);
-                if (!--reqs) {
-                    complete();
+                var result = fr.result;
+                if (result instanceof ArrayBuffer) {
+                    _this.crc = CRC32.crc32(result);
+                    if (!--reqs) {
+                        complete();
+                    }
                 }
             };
-            fr.onerror = function (e) {
-                error(e.target.error);
-            };
+            fr.onerror = function (e) { return error(fr.error); };
             fr.readAsArrayBuffer(data);
             var nr = new FileReader();
             nr.onload = function (e) {
-                _this.name = e.target.result;
-                if (!--reqs) {
-                    complete();
+                var result = nr.result;
+                if (result instanceof ArrayBuffer) {
+                    _this.name = result;
+                    if (!--reqs) {
+                        complete();
+                    }
                 }
             };
-            nr.onerror = function (e) {
-                error(e.target.error);
-            };
+            nr.onerror = function (e) { return error(nr.error); };
             nr.readAsArrayBuffer(new Blob([name]));
         }
         Object.defineProperty(FileInfo.prototype, "fileSize", {

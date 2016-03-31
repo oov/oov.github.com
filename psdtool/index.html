@@ -164,6 +164,9 @@
 											<span class="caret"></span>
 										</button>
 										<ul class="dropdown-menu dropdown-menu-right">
+											<li><a href="#" data-toggle="modal" data-target="#bulk-create-folder-dialog"><span class="glyphicon glyphicon-folder-open"></span> 一括フォルダー作成</a></li>
+											<li><a href="#" data-toggle="modal" data-target="#bulk-rename-dialog"><span class="glyphicon glyphicon-pencil"></span> 一括名前変更</a></li>
+											<li role="separator" class="divider"></li>
 											<li><a href="#" data-toggle="modal" data-target="#import-dialog"><span class="glyphicon glyphicon-open-file"></span> インポート</a></li>
 											<li><a href="#" data-toggle="modal" data-target="#export-dialog"><span class="glyphicon glyphicon-save-file"></span> エクスポート</a></li>
 										</ul>
@@ -216,12 +219,32 @@
 		</div>
 	</div>
 
+	<div class="modal" id="filter-dialog" tabindex="-1" role="dialog" aria-labelledby="filter-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="filter-dialog-label">フィルター</h4>
+				</div>
+				<div class="modal-body">
+					<p><small>お気に入りの適用箇所を絞ることができます。<a href="manual.html#feature-filter" target="manual">詳細</a></small></p>
+					<p>
+						<label>
+							<input type="checkbox" id="use-filter"> フィルター機能を使用する
+						</label>
+					</p>
+					<ul id="filter-tree"></ul>
+				</div>
+			</div>
+		</div>
+	</div>
+
 	<div class="modal" id="import-dialog" tabindex="-1" role="dialog" aria-labelledby="import-dialog-label">
 		<div class="modal-dialog" role="document">
 			<div class="modal-content">
 				<div class="modal-header">
 					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-					<h4 class="modal-title" id="import-dialog-label">お気に入りのインポート</h4>
+					<h4 class="modal-title" id="import-dialog-label">インポート</h4>
 				</div>
 				<div class="modal-body">
 					<dl>
@@ -250,7 +273,7 @@
 			<div class="modal-content">
 				<div class="modal-header">
 					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
-					<h4 class="modal-title" id="export-dialog-label">お気に入りのエクスポート</h4>
+					<h4 class="modal-title" id="export-dialog-label">エクスポート</h4>
 				</div>
 				<div class="modal-body">
 					<p>
@@ -261,12 +284,16 @@
 						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-zip">画像を ZIP ファイルでエクスポート</button>
 					</p>
 					<p><small>PNG ファイルと PFV ファイルを無圧縮の ZIP ファイルに書き出します。パターン数に応じて相応の時間が掛かります。画像には現在の左右反転や縮小などの設定が適用されます。</small></p>
+					<p>
+						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-layer-structure">レイヤー構造をテキストファイルでエクスポート</button>
+					</p>
+					<p><small>PSD ファイルのレイヤー構造をタブで整形された UTF-8 テキストファイルとして出力します。これにはお気に入りのデータは一切含まれていません。</small></p>
 				</div>
 			</div>
 		</div>
 	</div>
 
-	<div class="modal" id="export-progress-dialog" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false" data-show="false" aria-labelledby="export-progress-dialog-label">
+	<div class="modal" id="export-progress-dialog" tabindex="-1" role="dialog" data-backdrop="static" data-keyboard="false" aria-labelledby="export-progress-dialog-label">
 		<div class="modal-dialog" role="document">
 			<div class="modal-content">
 				<div class="modal-header">
@@ -282,7 +309,44 @@
 		</div>
 	</div>
 
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.0/jquery.min.js"></script>
+	<div class="modal" id="bulk-create-folder-dialog" tabindex="-1" role="dialog" data-backdrop="static" aria-labelledby="bulk-create-folder-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="bulk-create-folder-dialog-label">お気に入りフォルダー作成</h4>
+				</div>
+				<div class="modal-body">
+					<p>
+						お気に入りに作成したいフォルダー名を改行で区切って入力してください。
+						<br>先頭や末尾のスペース、空行などは無視されます。
+					</p>
+					<p><textarea id="bulk-create-folder-textarea" class="form-control" rows="8"></textarea></p>
+					<button type="button" class="btn btn-default" data-dismiss="modal" id="bulk-create-folder">フォルダー作成</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="bulk-rename-dialog" tabindex="-1" role="dialog" data-backdrop="static" aria-labelledby="bulk-rename-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="bulk-rename-dialog-label">一括名前変更</h4>
+				</div>
+				<div class="modal-body">
+					<p>
+						テキストを書き換えて「名前を変更」ボタンを押すと変更されます。
+					</p>
+					<ul id="bulk-rename-tree"></ul>
+					<button type="button" class="btn btn-default" data-dismiss="modal" id="bulk-rename">名前を変更</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
 	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha256-KXn5puMvxCw+dAYznun+drMdG1IFl3agK0p/pqT9KAo= sha512-2e8qq0ETcfWRI4HJBzQiA3UoyFk6tbNyG+qSaIBZLyW9Xf3sWZHN/lxe9fTh1U45DpPf07yj94KsUHHWe4Yk1A==" crossorigin="anonymous"></script>
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/mithril/0.2.2-rc.1/mithril.min.js"></script>
 	<script src="js/3rd.min.js"></script>
@@ -290,6 +354,9 @@
 	<script id="psdgo" src="js/psd/psd.js"></script>
 	<script src="js/downscaler.js"></script>
 	<script src="js/renderer.js"></script>
+	<script src="js/layertree.js"></script>
+	<script src="js/filter.js"></script>
+	<script src="js/favorite.js"></script>
 	<script src="js/zipper.js"></script>
 	<script src="js/main.js"></script>
 </body>

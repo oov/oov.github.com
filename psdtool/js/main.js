@@ -1,8 +1,6 @@
 /// <reference path="../typings/browser.d.ts" />
-/// <reference path="downscaler.ts" />
-/// <reference path="renderer.ts" />
 'use strict';
-(function (Mousetrap) {
+(function () {
     var originalStopCallback = Mousetrap.prototype.stopCallback;
     Mousetrap.prototype.stopCallback = function (e, element, combo) {
         if (!this.paused) {
@@ -13,38 +11,36 @@
         return originalStopCallback.call(this, e, element, combo);
     };
     Mousetrap.init();
-})(Mousetrap);
-(function () {
     var ui = {
-        redraw: null,
-        save: null,
-        maxPixels: null,
         optionAutoTrim: null,
         optionSafeMode: null,
-        seqDlPrefix: null,
-        seqDlNum: null,
-        favoriteToolbar: null,
-        favoriteTree: null,
-        favoriteTreeDefaultRootName: null,
-        favoriteTreeChangedTimer: null,
-        seqDl: null,
-        exportFavoritesPFV: null,
-        exportFavoritesZIP: null,
         sideBody: null,
         sideBodyScrollPos: null,
+        normalModeState: null,
         previewCanvas: null,
         previewBackground: null,
+        redraw: null,
+        save: null,
         showReadme: null,
         invertInput: null,
         fixedSide: null,
-        exportProgressDialog: null,
-        exportProgressDialogProgressBar: null,
-        exportProgressDialogProgressCaption: null,
-        normalModeState: null
+        maxPixels: null,
+        seqDlPrefix: null,
+        seqDlNum: null,
+        seqDl: null,
+        favoriteToolbar: null,
+        filterEditingTarget: null,
+        useFilter: null,
+        filterTree: null,
+        bulkCreateFolderTextarea: null,
+        bulkRenameData: null,
     };
     var renderer;
     var psdRoot;
-    var droppedPFV, uniqueId = Date.now().toString() + Math.random().toString().substring(2);
+    var filterRoot;
+    var layerRoot;
+    var favorite;
+    var droppedPFV;
     function init() {
         initDropZone('dropzone', function (files) {
             var i, ext;
@@ -65,7 +61,7 @@
         });
         initUI();
         document.getElementById('samplefile').addEventListener('click', function (e) {
-            loadAndParse(document.getElementById('samplefile').getAttribute('data-filename'));
+            return loadAndParse(document.getElementById('samplefile').getAttribute('data-filename'));
         }, false);
         window.addEventListener('resize', resized, false);
         window.addEventListener('hashchange', hashchanged, false);
@@ -91,7 +87,7 @@
         sideBody.style.width = sideContainer.clientWidth + 'px';
         sideBody.style.height = (sideContainer.clientHeight - sideHead.offsetHeight) + 'px';
         sideBody.style.display = 'block';
-        ui.favoriteTree[0].style.paddingTop = ui.favoriteToolbar.clientHeight + 'px';
+        document.getElementById('favorite-tree').style.paddingTop = ui.favoriteToolbar.clientHeight + 'px';
     }
     function hashchanged() {
         var hashData = decodeURIComponent(location.hash.substring(1));
@@ -122,7 +118,7 @@
         var errorMessage = document.createTextNode('');
         removeAllChild(errorMessageContainer);
         errorMessageContainer.appendChild(errorMessage);
-        function progress(phase, progress) {
+        var progress = function (phase, progress) {
             var msg;
             switch (phase) {
                 case 'prepare':
@@ -136,7 +132,7 @@
                     break;
             }
             updateProgress(bar, caption, progress, msg);
-        }
+        };
         progress('prepare', 0);
         loadAsBlob(progress, file_or_url)
             .then(parse.bind(this, progress.bind(this, 'load')))
@@ -158,102 +154,101 @@
             console.error(e);
         });
     }
-    function loadAsBlob(progress, file_or_url) {
+    function loadAsBlobCrossDomain(progress, url) {
         var deferred = m.deferred();
-        progress('prepare', 0);
-        if (typeof file_or_url === 'string') {
-            var crossDomain = false;
-            if (file_or_url.substring(0, 3) === 'xd:') {
-                file_or_url = file_or_url.substring(3);
-                crossDomain = true;
-            }
-            if (location.protocol === 'https:' && file_or_url.substring(0, 5) === 'http:') {
-                setTimeout(function () {
-                    deferred.reject(new Error('cannot access to the insecure content from HTTPS.'));
-                }, 0);
-                return deferred.promise;
-            }
-            if (crossDomain) {
-                var ifr = document.createElement('iframe'), port;
-                var timer = setTimeout(function () {
-                    port.onmessage = null;
-                    document.body.removeChild(ifr);
-                    deferred.reject(new Error('something went wrong'));
-                }, 20000);
-                ifr.sandbox = 'allow-scripts allow-same-origin';
-                ifr.onload = function () {
-                    var msgCh = new MessageChannel();
-                    port = msgCh.port1;
-                    port.onmessage = function (e) {
-                        if (timer) {
-                            clearTimeout(timer);
-                            timer = null;
-                        }
-                        if (!e.data || !e.data.type) {
-                            return;
-                        }
-                        switch (e.data.type) {
-                            case 'complete':
-                                document.body.removeChild(ifr);
-                                if (!e.data.data) {
-                                    deferred.reject(new Error('something went wrong'));
-                                    return;
-                                }
-                                progress('receive', 1);
-                                deferred.resolve({
-                                    buffer: e.data.data,
-                                    name: e.data.name ? e.data.name : extractFilePrefixFromUrl(file_or_url)
-                                });
-                                return;
-                            case 'error':
-                                document.body.removeChild(ifr);
-                                deferred.reject(new Error(e.data.message ? e.data.message : 'could not receive data'));
-                                return;
-                            case 'progress':
-                                if (('loaded' in e.data) && ('total' in e.data)) {
-                                    progress('receive', e.data.loaded / e.data.total);
-                                }
-                                return;
-                        }
-                    };
-                    ifr.contentWindow.postMessage(location.protocol, file_or_url.replace(/^([^:]+:\/\/[^\/]+).*$/, '$1'), [msgCh.port2]);
-                };
-                ifr.src = file_or_url;
-                ifr.style.display = 'none';
-                document.body.appendChild(ifr);
-                return deferred.promise;
-            }
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', file_or_url);
-            xhr.responseType = 'blob';
-            xhr.onload = function (e) {
-                progress('receive', 1);
-                if (xhr.status === 200) {
-                    deferred.resolve({
-                        buffer: xhr.response,
-                        name: extractFilePrefixFromUrl(file_or_url)
-                    });
-                    return;
-                }
-                deferred.reject(new Error(xhr.status + ' ' + xhr.statusText));
-            };
-            xhr.onerror = function (e) {
-                console.error(e);
-                deferred.reject(new Error('could not receive data'));
-            };
-            xhr.onprogress = function (e) {
-                progress('receive', e.loaded / e.total);
-            };
-            xhr.send(null);
+        if (location.protocol === 'https:' && url.substring(0, 5) === 'http:') {
+            setTimeout(function () { return deferred.reject(new Error('cannot access to the insecure content from HTTPS.')); }, 0);
             return deferred.promise;
         }
-        setTimeout(function () {
-            deferred.resolve({
+        var ifr = document.createElement('iframe'), port;
+        var timer = setTimeout(function () {
+            port.onmessage = null;
+            document.body.removeChild(ifr);
+            deferred.reject(new Error('something went wrong'));
+        }, 20000);
+        ifr.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+        ifr.onload = function () {
+            var msgCh = new MessageChannel();
+            port = msgCh.port1;
+            port.onmessage = function (e) {
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                }
+                if (!e.data || !e.data.type) {
+                    return;
+                }
+                switch (e.data.type) {
+                    case 'complete':
+                        document.body.removeChild(ifr);
+                        if (!e.data.data) {
+                            deferred.reject(new Error('something went wrong'));
+                            return;
+                        }
+                        progress('receive', 1);
+                        deferred.resolve({
+                            buffer: e.data.data,
+                            name: e.data.name ? e.data.name : extractFilePrefixFromUrl(url)
+                        });
+                        return;
+                    case 'error':
+                        document.body.removeChild(ifr);
+                        deferred.reject(new Error(e.data.message ? e.data.message : 'could not receive data'));
+                        return;
+                    case 'progress':
+                        if (('loaded' in e.data) && ('total' in e.data)) {
+                            progress('receive', e.data.loaded / e.data.total);
+                        }
+                        return;
+                }
+            };
+            ifr.contentWindow.postMessage(location.protocol, url.replace(/^([^:]+:\/\/[^\/]+).*$/, '$1'), [msgCh.port2]);
+        };
+        ifr.src = url;
+        ifr.style.display = 'none';
+        document.body.appendChild(ifr);
+        return deferred.promise;
+    }
+    function loadAsBlobFromString(progress, url) {
+        if (url.substring(0, 3) === 'xd:') {
+            return loadAsBlobCrossDomain(progress, url.substring(3));
+        }
+        var deferred = m.deferred();
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.responseType = 'blob';
+        xhr.onload = function (e) {
+            progress('receive', 1);
+            if (xhr.status === 200) {
+                deferred.resolve({
+                    buffer: xhr.response,
+                    name: extractFilePrefixFromUrl(url)
+                });
+                return;
+            }
+            deferred.reject(new Error(xhr.status + ' ' + xhr.statusText));
+        };
+        xhr.onerror = function (e) {
+            console.error(e);
+            deferred.reject(new Error('could not receive data'));
+        };
+        xhr.onprogress = function (e) { return progress('receive', e.loaded / e.total); };
+        xhr.send(null);
+        return deferred.promise;
+    }
+    function loadAsBlob(progress, file_or_url) {
+        progress('prepare', 0);
+        if (typeof file_or_url === 'string') {
+            return loadAsBlobFromString(progress, file_or_url);
+        }
+        else {
+            var deferred = m.deferred();
+            setTimeout(function () { return deferred.resolve({
                 buffer: file_or_url,
                 name: file_or_url.name.replace(/\..*$/i, '') + '_'
-            });
-        }, 0);
-        return deferred.promise;
+            }); }, 0);
+            return deferred.promise;
+        }
     }
     function extractFilePrefixFromUrl(url) {
         url = url.replace(/#[^#]*$/, '');
@@ -264,9 +259,7 @@
     }
     function parse(progress, obj) {
         var deferred = m.deferred();
-        PSD.parseWorker(obj.buffer, progress, function (psd) {
-            deferred.resolve({ psd: psd, name: obj.name });
-        }, function (error) { deferred.reject(error); });
+        PSD.parseWorker(obj.buffer, progress, function (psd) { return deferred.resolve({ psd: psd, name: obj.name }); }, function (error) { return deferred.reject(error); });
         return deferred.promise;
     }
     function removeAllChild(elem) {
@@ -278,20 +271,51 @@
         var deferred = m.deferred();
         setTimeout(function () {
             try {
-                renderer = new Renderer(psd);
-                buildLayerTree(renderer, function () { ui.redraw(); });
-                ui.maxPixels.value = ui.optionAutoTrim.checked ? renderer.Height : renderer.CanvasHeight;
+                renderer = new Renderer.Renderer(psd);
+                var layerTree = document.getElementById('layer-tree');
+                layerRoot = new LayerTree.LayerTree(ui.optionSafeMode.checked, layerTree, psd);
+                filterRoot = new LayerTree.Filter(ui.filterTree, psd);
+                for (var key in renderer.nodes) {
+                    if (!renderer.nodes.hasOwnProperty(key)) {
+                        continue;
+                    }
+                    (function (r, l) {
+                        r.getVisibleState = function () { return l.checked; };
+                    })(renderer.nodes[key], layerRoot.nodes[key]);
+                }
+                layerTree.addEventListener('click', function (e) {
+                    var target = e.target;
+                    if (target instanceof HTMLInputElement && target.classList.contains('psdtool-layer-visible')) {
+                        var n = layerRoot.nodes[parseInt(target.getAttribute('data-seq'), 10)];
+                        for (var p = n.parent; !p.isRoot; p = p.parent) {
+                            p.checked = true;
+                        }
+                        if (n.clippedBy) {
+                            n.clippedBy.checked = true;
+                        }
+                        ui.redraw();
+                    }
+                }, false);
+                ui.maxPixels.value = (ui.optionAutoTrim.checked ? renderer.Height : renderer.CanvasHeight).toString();
                 ui.seqDlPrefix.value = name;
-                ui.seqDlNum.value = 0;
+                ui.seqDlNum.value = '0';
                 ui.showReadme.style.display = psd.Readme !== '' ? 'block' : 'none';
-                loadPFVFromDroppedFile().then(function (loaded) {
-                    return loaded ? true : loadPFVFromString(psd.PFV);
-                }).then(function (loaded) {
-                    return loaded ? true : loadPFVFromLocalStorage(psd.Hash);
-                }).then(null, function (e) {
-                    console.error(e);
-                    alert(e);
-                });
+                //  TODO: error handling
+                favorite.psdHash = psd.Hash;
+                if (droppedPFV) {
+                    var fr_1 = new FileReader();
+                    fr_1.onload = function () {
+                        favorite.loadFromArrayBuffer(fr_1.result);
+                    };
+                    fr_1.readAsArrayBuffer(droppedPFV);
+                }
+                else {
+                    if (!favorite.loadFromLocalStorage(psd.Hash)) {
+                        if (psd.PFV !== '') {
+                            favorite.loadFromString(psd.PFV);
+                        }
+                    }
+                }
                 psdRoot = psd;
                 ui.redraw();
                 deferred.resolve();
@@ -330,241 +354,6 @@
         }
         renderer.render(scale, autoTrim, ui.invertInput.checked, callback);
     }
-    function updateClass() {
-        function r(n) {
-            if (n.visible) {
-                n.userData.li.classList.remove('psdtool-hidden');
-                if (n.clip) {
-                    for (var i = 0; i < n.clip.length; ++i) {
-                        n.clip[i].userData.li.classList.remove('psdtool-hidden-by-clipping');
-                    }
-                }
-            }
-            else {
-                n.userData.li.classList.add('psdtool-hidden');
-                if (n.clip) {
-                    for (var i = 0; i < n.clip.length; ++i) {
-                        n.clip[i].userData.li.classList.add('psdtool-hidden-by-clipping');
-                    }
-                }
-            }
-            for (var i = 0; i < n.children.length; ++i) {
-                r(n.children[i]);
-            }
-        }
-        for (var i = 0; i < renderer.StateTreeRoot.children.length; ++i) {
-            r(renderer.StateTreeRoot.children[i]);
-        }
-    }
-    function favoriteTreeChanged() {
-        if (ui.favoriteTreeChangedTimer) {
-            clearTimeout(ui.favoriteTreeChangedTimer);
-        }
-        ui.favoriteTreeChangedTimer = setTimeout(function () {
-            ui.favoriteTreeChangedTimer = null;
-            var pfv = buildPFV(ui.favoriteTree.jstree('get_json'));
-            var pfvs = [];
-            if ('psdtool_pfv' in localStorage) {
-                pfvs = JSON.parse(localStorage['psdtool_pfv']);
-            }
-            var found = false;
-            for (var i = 0; i < pfvs.length; ++i) {
-                if (pfvs[i].id === uniqueId && pfvs[i].hash === psdRoot.Hash) {
-                    pfvs.splice(i, 1);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found && countPFVEntries(pfv) === 0) {
-                return;
-            }
-            pfvs.push({
-                id: uniqueId,
-                time: new Date().getTime(),
-                hash: psdRoot.Hash,
-                data: pfv
-            });
-            while (pfvs.length > 8) {
-                pfvs.shift();
-            }
-            localStorage['psdtool_pfv'] = JSON.stringify(pfvs);
-        }, 100);
-    }
-    function initFavoriteTree(data) {
-        var treeSettings = {
-            core: {
-                animation: false,
-                check_callback: function (op, node, parent) {
-                    switch (op) {
-                        case 'create_node':
-                            return node.type !== 'root';
-                        case 'rename_node':
-                            return true;
-                        case 'delete_node':
-                            return node.type !== 'root';
-                        case 'move_node':
-                            return node.type !== 'root' && parent.id !== '#' && parent.type !== 'item';
-                        case 'copy_node':
-                            return node.type !== 'root' && parent.id !== '#' && parent.type !== 'item';
-                    }
-                },
-                dblclick_toggle: false,
-                themes: {
-                    dots: false
-                },
-                data: data ? data : [{
-                        id: 'root',
-                        text: ui.favoriteTreeDefaultRootName,
-                        type: 'root',
-                    }]
-            },
-            types: {
-                root: {
-                    icon: false,
-                },
-                item: {
-                    icon: 'glyphicon glyphicon-picture'
-                },
-                folder: {
-                    icon: 'glyphicon glyphicon-folder-open'
-                },
-                filter: {
-                    icon: 'glyphicon glyphicon-filter'
-                }
-            },
-            plugins: ['types', 'dnd', 'wholerow'],
-        };
-        if (ui.favoriteTree) {
-            ui.favoriteTree.jstree('destroy');
-        }
-        ui.favoriteTree = jQuery('#favorite-tree').jstree(treeSettings);
-        ui.favoriteTree.on([
-            'set_text.jstree',
-            'create_node.jstree',
-            'rename_node.jstree',
-            'delete_node.jstree',
-            'move_node.jstree',
-            'copy_node.jstree',
-            'cut.jstree',
-            'paste.jstree'
-        ].join(' '), favoriteTreeChanged);
-        ui.favoriteTree.on('changed.jstree', function (e) {
-            var jst = $(this).jstree();
-            var selectedList = jst.get_top_selected(true);
-            if (selectedList.length === 0) {
-                return;
-            }
-            var selected = selectedList[0];
-            if (selected.type !== 'item') {
-                leaveReaderMode();
-                return;
-            }
-            try {
-                enterReaderMode(selected.data.value, selected.text + '.png');
-            }
-            catch (e) {
-                console.error(e);
-                alert(e);
-            }
-        });
-        ui.favoriteTree.on('copy_node.jstree', function (e, data) {
-            var jst = $(this).jstree();
-            function process(node, original) {
-                var text = suggestUniqueName(jst, node);
-                if (node.text !== text) {
-                    jst.rename_node(node, text);
-                }
-                switch (node.type) {
-                    case 'item':
-                        node.data = {};
-                        if ('value' in original.data) {
-                            node.data.value = original.data.value;
-                        }
-                        break;
-                    case 'folder':
-                        for (var i = 0; i < node.children.length; ++i) {
-                            process(jst.get_node(node.children[i]), jst.get_node(original.children[i]));
-                        }
-                        break;
-                    case 'filter':
-                        for (var i = 0; i < node.children.length; ++i) {
-                            process(jst.get_node(node.children[i]), jst.get_node(original.children[i]));
-                        }
-                        break;
-                }
-            }
-            process(data.node, data.original);
-        });
-        ui.favoriteTree.on('move_node.jstree', function (e, data) {
-            var jst = $(this).jstree();
-            var text = suggestUniqueName(jst, data.node, data.text);
-            if (data.text !== text) {
-                jst.rename_node(data.node, text);
-            }
-        });
-        ui.favoriteTree.on('create_node.jstree', function (e, data) {
-            var jst = $(this).jstree();
-            var text = suggestUniqueName(jst, data.node);
-            if (data.node.text !== text) {
-                jst.rename_node(data.node, text);
-            }
-        });
-        ui.favoriteTree.on('rename_node.jstree', function (e, data) {
-            var jst = $(this).jstree();
-            var text = suggestUniqueName(jst, data.node, data.text);
-            if (data.text !== text) {
-                jst.rename_node(data.node, text);
-            }
-        });
-        ui.favoriteTree.on('dblclick.jstree', function (e) {
-            var jst = $(this).jstree();
-            var selected = jst.get_node(e.target);
-            if (selected.type !== 'item') {
-                jst.toggle_node(selected);
-                return;
-            }
-            try {
-                if (selected.data.value) {
-                    leaveReaderMode(selected.data.value);
-                    return;
-                }
-            }
-            catch (e) {
-                console.error(e);
-                alert(e);
-            }
-        });
-    }
-    function suggestUniqueName(jst, node, newText) {
-        var i, n = jst.get_node(node), parent = jst.get_node(n.parent);
-        var nameMap = {};
-        for (i = 0; i < parent.children.length; ++i) {
-            if (parent.children[i] === n.id) {
-                continue;
-            }
-            nameMap[jst.get_text(parent.children[i])] = true;
-        }
-        if (newText === undefined) {
-            newText = n.text;
-        }
-        if (!(newText in nameMap)) {
-            return newText;
-        }
-        newText += ' ';
-        i = 2;
-        while ((newText + i) in nameMap) {
-            ++i;
-        }
-        return newText + i;
-    }
-    function getFavoriteTreeRootName() {
-        var jst = ui.favoriteTree.jstree();
-        var root = jst.get_node('root');
-        if (root && root.text) {
-            return root.text;
-        }
-        return ui.favoriteTreeDefaultRootName;
-    }
     function cleanForFilename(f) {
         return f.replace(/[\x00-\x1f\x22\x2a\x2f\x3a\x3c\x3e\x3f\x7c\x7f]+/g, '_');
     }
@@ -577,160 +366,141 @@
         s += ('0' + d.getSeconds()).slice(-2);
         return s;
     }
-    function addNewNode(jst, objType, usePrompt) {
-        function createNode(obj) {
-            var selectedList = jst.get_top_selected(true);
-            if (selectedList.length === 0) {
-                return jst.create_node('root', obj, 'last');
-            }
-            var selected = selectedList[0];
-            if (selected.type !== 'item') {
-                var n = jst.create_node(selected, obj, 'last');
-                if (!selected.state.opened) {
-                    jst.open_node(selected, null);
-                }
-                return n;
-            }
-            var parent = jst.get_node(selected.parent);
-            var idx = parent.children.indexOf(selected.id);
-            return jst.create_node(parent, obj, idx !== -1 ? idx + 1 : 'last');
-        }
-        var obj, selector;
-        switch (objType) {
-            case 'item':
-                leaveReaderMode();
-                obj = {
-                    text: 'New Item',
-                    type: 'item',
-                    data: {
-                        value: serializeCheckState(false)
-                    }
-                };
-                selector = 'button[data-psdtool-tree-add-item]';
-                break;
-            case 'folder':
-                obj = {
-                    text: 'New Folder',
-                    type: 'folder'
-                };
-                selector = 'button[data-psdtool-tree-add-folder]';
-                break;
-            case 'filter':
-                obj = {
-                    text: 'New Filter',
-                    type: 'filter'
-                };
-                selector = 'button[data-psdtool-tree-add-filter]';
-                break;
-            default:
-                throw new Error('unsupported object type: ' + objType);
-        }
-        var id = createNode(obj);
-        jst.deselect_all();
-        jst.select_node(id);
-        leaveReaderMode();
-        if (!usePrompt) {
-            return id;
-        }
-        var oldText = jst.get_text(id);
-        var text = prompt(document.querySelector(selector).getAttribute('data-caption'), oldText);
-        if (text === null) {
-            removeSelectedNode(jst);
-            return;
-        }
-        text = suggestUniqueName(jst, id, text);
-        if (text !== oldText) {
-            jst.rename_node(id, text);
-        }
-        return id;
-    }
-    function removeSelectedNode(jst) {
-        leaveReaderMode();
-        try {
-            jst.delete_node(jst.get_top_selected());
-        }
-        catch (e) {
-            // workaround that an error happens when deletes node during editing.
-            jst.delete_node(jst.create_node(null, 'dummy', 'last'));
-        }
-        leaveReaderMode();
-    }
     function pfvOnDrop(files) {
         leaveReaderMode();
         var i, ext;
         for (i = 0; i < files.length; ++i) {
             ext = files[i].name.substring(files[i].name.length - 4).toLowerCase();
             if (ext === '.pfv') {
-                loadAsBlob(function () { return undefined; }, files[i]).then(function (buffer) {
-                    var fr = new FileReader();
-                    fr.onload = function () {
-                        loadPFV(arrayBufferToString(fr.result));
+                // TODO: error handling
+                var fr = new FileReader();
+                fr.onload = function (e) {
+                    if (favorite.loadFromArrayBuffer(fr.result)) {
                         jQuery('#import-dialog').modal('hide');
-                    };
-                    fr.readAsArrayBuffer(buffer.buffer);
-                }).then(null, function (e) {
-                    console.error(e);
-                    alert(e);
-                });
-                break;
+                    }
+                };
+                fr.readAsArrayBuffer(files[i]);
+                return;
             }
         }
     }
+    function getInputElement(query) {
+        var elem = document.querySelector(query);
+        if (elem instanceof HTMLInputElement) {
+            return elem;
+        }
+        throw new Error('element not found ' + query);
+    }
     function initFavoriteUI() {
         var _this = this;
-        ui.favoriteTreeDefaultRootName = document.getElementById('favorite-tree').getAttribute('data-root-name');
-        initFavoriteTree();
+        favorite = new Favorite.Favorite(document.getElementById('favorite-tree'), document.getElementById('favorite-tree').getAttribute('data-root-name'));
+        favorite.onClearSelection = function () { return leaveReaderMode(); };
+        favorite.onSelect = function (item) {
+            if (item.type !== 'item') {
+                leaveReaderMode();
+                return;
+            }
+            try {
+                var filter = void 0;
+                for (var _i = 0, _a = favorite.getParents(item); _i < _a.length; _i++) {
+                    var p = _a[_i];
+                    if (p.type === 'filter') {
+                        filter = p.data.value;
+                        break;
+                    }
+                }
+                enterReaderMode(item.data.value, filter, item.text + '.png');
+            }
+            catch (e) {
+                console.error(e);
+                alert(e);
+            }
+        };
+        favorite.onDoubleClick = function (item) {
+            try {
+                switch (item.type) {
+                    case 'item':
+                        var filter = void 0;
+                        for (var _i = 0, _a = favorite.getParents(item); _i < _a.length; _i++) {
+                            var p = _a[_i];
+                            if (p.type === 'filter') {
+                                filter = p.data.value;
+                                break;
+                            }
+                        }
+                        leaveReaderMode(item.data.value, filter);
+                        break;
+                    case 'folder':
+                    case 'filter':
+                        ui.filterEditingTarget = item;
+                        var dialog = jQuery('#filter-dialog');
+                        if (!dialog.data('bs.modal')) {
+                            dialog.modal();
+                        }
+                        else {
+                            dialog.modal('show');
+                        }
+                        break;
+                }
+            }
+            catch (e) {
+                console.error(e);
+                alert(e);
+            }
+        };
         jQuery('button[data-psdtool-tree-add-item]').on('click', function (e) {
-            var jst = jQuery(this.getAttribute('data-psdtool-tree-add-item')).jstree();
-            jst.edit(addNewNode(jst, 'item', false));
+            leaveReaderMode();
+            favorite.add('item', true, '', layerRoot.serialize(false));
         });
         Mousetrap.bind('mod+b', function (e) {
             e.preventDefault();
-            var jst = ui.favoriteTree.jstree();
-            addNewNode(jst, 'item', true);
+            var text = prompt(document.querySelector('button[data-psdtool-tree-add-item]').getAttribute('data-caption'), '');
+            if (text === null || text === '') {
+                return;
+            }
+            leaveReaderMode();
+            favorite.add('item', false, text, layerRoot.serialize(false));
         });
         jQuery('button[data-psdtool-tree-add-folder]').on('click', function (e) {
-            var jst = jQuery(this.getAttribute('data-psdtool-tree-add-folder')).jstree();
-            jst.edit(addNewNode(jst, 'folder', false));
+            favorite.add('folder', true);
         });
         Mousetrap.bind('mod+d', function (e) {
             e.preventDefault();
-            var jst = ui.favoriteTree.jstree();
-            addNewNode(jst, 'folder', true);
-        });
-        jQuery('button[data-psdtool-tree-rename]').on('click', function (e) {
-            var jst = jQuery(this.getAttribute('data-psdtool-tree-rename')).jstree();
-            jst.edit(jst.get_top_selected());
-        });
-        Mousetrap.bind('f2', function (e) {
-            e.preventDefault();
-            var jst = ui.favoriteTree.jstree();
-            jst.edit(jst.get_top_selected());
-        });
-        jQuery('button[data-psdtool-tree-remove]').on('click', function (e) {
-            var jst = jQuery(this.getAttribute('data-psdtool-tree-remove')).jstree();
-            removeSelectedNode(jst);
-        });
-        Mousetrap.bind('shift+mod+g', function (e) {
-            var target = e.target;
-            if (!target.classList.contains('psdtool-layer-visible')) {
+            var text = prompt(document.querySelector('button[data-psdtool-tree-add-folder]').getAttribute('data-caption'), '');
+            if (text === null || text === '') {
                 return;
             }
+            favorite.clearSelection();
+            favorite.add('folder', false, text);
+        });
+        jQuery('button[data-psdtool-tree-rename]').on('click', function (e) { return favorite.edit(); });
+        Mousetrap.bind('f2', function (e) {
             e.preventDefault();
-            var jst = ui.favoriteTree.jstree();
-            if (target.classList.contains('psdtool-layer-radio')) {
-                var old = serializeCheckState(true);
-                var created = [];
-                var elems = document.querySelectorAll('input[name="' + target.name + '"].psdtool-layer-radio');
-                for (var i = 0, id = void 0; i < elems.length; ++i) {
-                    elems[i].checked = true;
-                    id = addNewNode(jst, 'item', false);
-                    jst.rename_node(id, elems[i].getAttribute('data-name'));
-                    created.push(jst.get_text(id));
+            favorite.edit();
+        });
+        jQuery('button[data-psdtool-tree-remove]').on('click', function (e) { return favorite.remove(); });
+        Mousetrap.bind('shift+mod+g', function (e) {
+            var target = e.target;
+            if (target instanceof HTMLElement && target.classList.contains('psdtool-layer-visible')) {
+                e.preventDefault();
+                if (!target.classList.contains('psdtool-layer-radio')) {
+                    return;
                 }
-                deserializeCheckState(old);
-                ui.redraw();
-                alert(created.length + ' favorite item(s) has been added.\n\n' + created.join('\n'));
+                if (target instanceof HTMLInputElement) {
+                    var old = layerRoot.serialize(true);
+                    var created = [];
+                    var n = void 0;
+                    var elems = document.querySelectorAll('input[name="' + target.name + '"].psdtool-layer-radio');
+                    for (var i = 0; i < elems.length; ++i) {
+                        n = layerRoot.nodes[parseInt(elems[i].getAttribute('data-seq'), 10)];
+                        n.checked = true;
+                        favorite.add('item', false, n.displayName, layerRoot.serialize(false));
+                        created.push(n.displayName);
+                    }
+                    layerRoot.deserialize(old);
+                    ui.redraw();
+                    alert(created.length + ' favorite item(s) has been added.\n\n' + created.join('\n'));
+                }
             }
         });
         initDropZone('pfv-dropzone', pfvOnDrop);
@@ -739,45 +509,183 @@
             // build the recent list
             var recents = document.getElementById('pfv-recents');
             removeAllChild(recents);
-            var pfv = [], btn;
+            var pfvs = [], btn;
             if ('psdtool_pfv' in localStorage) {
-                pfv = JSON.parse(localStorage['psdtool_pfv']);
+                pfvs = JSON.parse(localStorage['psdtool_pfv']);
             }
-            for (var i = pfv.length - 1; i >= 0; --i) {
+            for (var i = pfvs.length - 1; i >= 0; --i) {
                 btn = document.createElement('button');
                 btn.type = 'button';
                 btn.className = 'list-group-item';
-                if (pfv[i].hash === psdRoot.Hash) {
+                if (pfvs[i].hash === psdRoot.Hash) {
                     btn.className += ' list-group-item-info';
                 }
                 btn.setAttribute('data-dismiss', 'modal');
-                (function (btn, data, id) {
+                (function (btn, data, uniqueId) {
                     btn.addEventListener('click', function (e) {
                         leaveReaderMode();
-                        loadPFVFromString(data).then(function (loaded) { uniqueId = id; }, function (e) { console.error(e); alert(e); });
+                        // TODO: error handling
+                        favorite.loadFromString(data, uniqueId);
                     }, false);
-                })(btn, pfv[i].data, pfv[i].id);
-                btn.appendChild(document.createTextNode(countPFVEntries(pfv[i].data) +
+                })(btn, pfvs[i].data, pfvs[i].id);
+                btn.appendChild(document.createTextNode(Favorite.countEntries(pfvs[i].data) +
                     ' item(s) / Created at ' +
-                    formateDate(new Date(pfv[i].time))));
+                    formateDate(new Date(pfvs[i].time))));
                 recents.appendChild(btn);
             }
         });
-        ui.exportFavoritesPFV = document.getElementById('export-favorites-pfv');
-        ui.exportFavoritesPFV.addEventListener('click', function (e) {
-            saveAs(new Blob([buildPFV(ui.favoriteTree.jstree('get_json'))], {
-                type: 'text/plain'
-            }), cleanForFilename(getFavoriteTreeRootName()) + '.pfv');
+        var updateFilter = function () {
+            var node = ui.filterEditingTarget;
+            if (!ui.useFilter.checked) {
+                favorite.update({ id: node.id, type: 'folder' });
+                favorite.updateLocalStorage();
+                return;
+            }
+            var s = filterRoot.serialize();
+            if (!s) {
+                favorite.update({ id: node.id, type: 'folder' });
+                favorite.updateLocalStorage();
+                return;
+            }
+            favorite.update({ id: node.id, type: 'filter', data: { value: s } });
+            favorite.updateLocalStorage();
+        };
+        ui.useFilter = getInputElement('#use-filter');
+        ui.useFilter.addEventListener('click', function (e) {
+            var inp = e.target;
+            if (inp instanceof HTMLInputElement) {
+                if (inp.checked) {
+                    ui.filterTree.classList.remove('disabled');
+                }
+                else {
+                    ui.filterTree.classList.add('disabled');
+                }
+                updateFilter();
+            }
+        }, false);
+        var elem = document.getElementById('filter-tree');
+        if (elem instanceof HTMLUListElement) {
+            ui.filterTree = elem;
+        }
+        else {
+            throw new Error('element not found #filter-tree');
+        }
+        ui.filterTree.addEventListener('click', function (e) {
+            var inp = e.target;
+            if (inp instanceof HTMLInputElement) {
+                var li = inp.parentElement;
+                while (li && li.tagName !== 'LI') {
+                    li = li.parentElement;
+                }
+                if (inp.checked) {
+                    li.classList.add('checked');
+                }
+                else {
+                    li.classList.remove('checked');
+                }
+                updateFilter();
+            }
+        }, false);
+        jQuery('#filter-dialog').on('shown.bs.modal', function (e) {
+            var parents = [];
+            for (var _i = 0, _a = favorite.getParents(ui.filterEditingTarget); _i < _a.length; _i++) {
+                var p = _a[_i];
+                if (p.type === 'filter') {
+                    parents.push(p.data.value);
+                }
+            }
+            if (ui.filterEditingTarget.type === 'filter') {
+                ui.useFilter.checked = true;
+                ui.filterTree.classList.remove('disabled');
+                filterRoot.deserialize(ui.filterEditingTarget.data.value, parents);
+            }
+            else {
+                ui.useFilter.checked = false;
+                ui.filterTree.classList.add('disabled');
+                filterRoot.deserialize('', parents);
+            }
+            var inputs = ui.filterTree.querySelectorAll('input');
+            for (var i = 0, elem_1, li = void 0; i < inputs.length; ++i) {
+                elem_1 = inputs[i];
+                li = elem_1.parentElement;
+                while (li && li.tagName !== 'LI') {
+                    li = li.parentElement;
+                }
+                if (elem_1.disabled) {
+                    li.classList.add('disabled');
+                }
+                else {
+                    li.classList.remove('disabled');
+                }
+                if (elem_1.checked) {
+                    li.classList.add('checked');
+                }
+                else {
+                    li.classList.remove('checked');
+                }
+            }
         });
-        ui.exportProgressDialog = jQuery('#export-progress-dialog').modal();
-        ui.exportProgressDialogProgressBar = document.getElementById('export-progress-dialog-progress-bar');
-        ui.exportProgressDialogProgressCaption = document.getElementById('export-progress-dialog-progress-caption');
-        ui.exportFavoritesZIP = document.getElementById('export-favorites-zip');
-        ui.exportFavoritesZIP.addEventListener('click', function (e) {
+        jQuery('#bulk-create-folder-dialog').on('shown.bs.modal', function (e) { return ui.bulkCreateFolderTextarea.focus(); });
+        var e = document.getElementById('bulk-create-folder-textarea');
+        if (e instanceof HTMLTextAreaElement) {
+            ui.bulkCreateFolderTextarea = e;
+        }
+        else {
+            throw new Error('element not found: #bulk-create-folder-textarea');
+        }
+        document.getElementById('bulk-create-folder').addEventListener('click', function (e) {
+            var folders = [];
+            for (var _i = 0, _a = ui.bulkCreateFolderTextarea.value.replace(/\r/g, '').split('\n'); _i < _a.length; _i++) {
+                var line = _a[_i];
+                line = line.trim();
+                if (line === '') {
+                    continue;
+                }
+                folders.push(line);
+            }
+            favorite.addFolders(folders);
+            ui.bulkCreateFolderTextarea.value = '';
+        }, false);
+        jQuery('#bulk-rename-dialog').on('shown.bs.modal', function (e) {
+            var r = function (ul, nodes) {
+                var cul;
+                var li;
+                var input;
+                for (var _i = 0, nodes_1 = nodes; _i < nodes_1.length; _i++) {
+                    var n = nodes_1[_i];
+                    input = document.createElement('input');
+                    input.className = 'form-control';
+                    input.value = n.text;
+                    (function (input, n) {
+                        input.onblur = function (e) { n.text = input.value.trim(); };
+                    })(input, n);
+                    li = document.createElement('li');
+                    li.appendChild(input);
+                    cul = document.createElement('ul');
+                    li.appendChild(cul);
+                    r(cul, n.children);
+                    ul.appendChild(li);
+                }
+            };
+            var elem = document.getElementById('bulk-rename-tree');
+            ui.bulkRenameData = favorite.renameNodes;
+            removeAllChild(elem);
+            r(elem, ui.bulkRenameData);
+        });
+        document.getElementById('bulk-rename').addEventListener('click', function (e) {
+            favorite.bulkRename(ui.bulkRenameData);
+        }, false);
+        document.getElementById('export-favorites-pfv').addEventListener('click', function (e) {
+            saveAs(new Blob([favorite.pfv], {
+                type: 'text/plain'
+            }), cleanForFilename(favorite.rootName) + '.pfv');
+        }, false);
+        document.getElementById('export-favorites-zip').addEventListener('click', function (e) {
+            var parents = [];
             var path = [], files = [];
-            function r(children) {
-                for (var i = 0, item = void 0; i < children.length; ++i) {
-                    item = children[i];
+            var r = function (children) {
+                for (var _i = 0, children_1 = children; _i < children_1.length; _i++) {
+                    var item = children_1[_i];
                     path.push(cleanForFilename(item.text));
                     switch (item.type) {
                         case 'root':
@@ -786,27 +694,51 @@
                             path.push('');
                             break;
                         case 'folder':
+                            parents.unshift(item);
                             r(item.children);
+                            parents.shift();
                             break;
                         case 'filter':
+                            parents.unshift(item);
                             r(item.children);
+                            parents.shift();
                             break;
                         case 'item':
-                            files.push({
-                                name: path.join('\\') + '.png',
-                                value: item.data.value
-                            });
+                            var filter = void 0;
+                            for (var _a = 0, parents_1 = parents; _a < parents_1.length; _a++) {
+                                var p = parents_1[_a];
+                                if (p.type === 'filter') {
+                                    filter = p.data.value;
+                                    break;
+                                }
+                            }
+                            if (filter) {
+                                files.push({
+                                    name: path.join('\\') + '.png',
+                                    value: item.data.value,
+                                    filter: filter
+                                });
+                            }
+                            else {
+                                files.push({
+                                    name: path.join('\\') + '.png',
+                                    value: item.data.value
+                                });
+                            }
                             break;
                         default:
                             throw new Error('unknown item type: ' + item.type);
                     }
                     path.pop();
                 }
-            }
-            var json = ui.favoriteTree.jstree('get_json');
+            };
+            var json = favorite.json;
             r(json);
-            var backup = serializeCheckState(true);
+            var backup = layerRoot.serialize(true);
             var z = new Zipper.Zipper();
+            var progressBar = document.getElementById('export-progress-dialog-progress-bar');
+            var progressCaption = document.getElementById('export-progress-dialog-progress-caption');
+            var reportProgress = updateProgress.bind(_this, progressBar, progressCaption);
             var aborted = false;
             var errorHandler = function (readableMessage, err) {
                 z.dispose(function (err) { return undefined; });
@@ -814,29 +746,34 @@
                 if (!aborted) {
                     alert(readableMessage + ': ' + err);
                 }
-                ui.exportProgressDialog.modal('hide');
+                jQuery('#export-progress-dialog').modal('hide');
             };
             // it is needed to avoid alert storm when reload during exporting.
             window.addEventListener('unload', function () { aborted = true; }, false);
             var added = 0;
             var addedHandler = function () {
                 if (++added < files.length + 1) {
-                    updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, added / (files.length + 1), added === 1 ? 'drawing...' : '(' + added + '/' + files.length + ') ' + decodeLayerName(files[added - 1].name));
+                    reportProgress(added / (files.length + 1), added === 1 ? 'drawing...' : '(' + added + '/' + files.length + ') ' + files[added - 1].name);
                     return;
                 }
-                deserializeCheckState(backup);
-                updateProgress(ui.exportProgressDialogProgressBar, ui.exportProgressDialogProgressCaption, 1, 'building a zip...');
+                layerRoot.deserialize(backup);
+                reportProgress(1, 'building a zip...');
                 z.generate(function (blob) {
-                    ui.exportProgressDialog.modal('hide');
-                    saveAs(blob, cleanForFilename(getFavoriteTreeRootName()) + '.zip');
+                    jQuery('#export-progress-dialog').modal('hide');
+                    saveAs(blob, cleanForFilename(favorite.rootName) + '.zip');
                     z.dispose(function (err) { return undefined; });
                 }, errorHandler.bind(_this, 'cannot create a zip archive'));
             };
             z.init(function () {
-                z.add('favorites.pfv', new Blob([buildPFV(json)], { type: 'text/plain; charset=utf-8' }), addedHandler, errorHandler.bind(_this, 'cannot write pfv to a zip archive'));
+                z.add('favorites.pfv', new Blob([favorite.pfv], { type: 'text/plain; charset=utf-8' }), addedHandler, errorHandler.bind(_this, 'cannot write pfv to a zip archive'));
                 var i = 0;
                 var process = function () {
-                    deserializeCheckState(files[i].value);
+                    if ('filter' in files[i]) {
+                        layerRoot.deserializePartial('', files[i].value, files[i].filter);
+                    }
+                    else {
+                        layerRoot.deserialize(files[i].value);
+                    }
                     render(function (progress, canvas) {
                         if (progress !== 1) {
                             return;
@@ -849,8 +786,19 @@
                 };
                 process();
             }, errorHandler.bind(_this, 'cannot create a zip archive'));
-            ui.exportProgressDialog.modal('show');
-        });
+            var dialog = jQuery('#export-progress-dialog');
+            if (!dialog.data('bs.modal')) {
+                dialog.modal();
+            }
+            else {
+                dialog.modal('show');
+            }
+        }, false);
+        document.getElementById('export-layer-structure').addEventListener('click', function (e) {
+            saveAs(new Blob([layerRoot.text], {
+                type: 'text/plain'
+            }), 'layer.txt');
+        }, false);
     }
     function dataSchemeURIToArrayBuffer(str) {
         var bin = atob(str.substring(str.indexOf(',') + 1));
@@ -866,8 +814,9 @@
         });
     }
     function initUI() {
-        ui.optionAutoTrim = document.getElementById('option-auto-trim');
-        ui.optionSafeMode = document.getElementById('option-safe-mode');
+        var _this = this;
+        ui.optionAutoTrim = getInputElement('#option-auto-trim');
+        ui.optionSafeMode = getInputElement('#option-safe-mode');
         // save and restore scroll position of side-body on each tab.
         ui.favoriteToolbar = document.getElementById('favorite-toolbar');
         ui.sideBody = document.getElementById('side-body');
@@ -894,10 +843,16 @@
         });
         initFavoriteUI();
         ui.previewBackground = document.getElementById('preview-background');
-        ui.previewCanvas = document.getElementById('preview');
+        var elem = document.getElementById('preview');
+        if (elem instanceof HTMLCanvasElement) {
+            ui.previewCanvas = elem;
+        }
+        else {
+            throw new Error('element not found: #preview');
+        }
         ui.previewCanvas.addEventListener('dragstart', function (e) {
-            var s = this.toDataURL();
-            var name = this.getAttribute('data-filename');
+            var s = _this.toDataURL();
+            var name = _this.getAttribute('data-filename');
             if (name) {
                 var p = s.indexOf(';');
                 s = s.substring(0, p) + ';filename=' + encodeURIComponent(name) + s.substring(p);
@@ -911,41 +866,43 @@
                 ui.previewBackground.style.width = canvas.width + 'px';
                 ui.previewBackground.style.height = canvas.height + 'px';
                 ui.seqDl.disabled = progress !== 1;
-                ui.previewCanvas.draggable = progress !== 1 ? 'false' : 'true';
+                ui.previewCanvas.draggable = progress === 1;
                 setTimeout(function () {
                     ui.previewCanvas.width = canvas.width;
                     ui.previewCanvas.height = canvas.height;
-                    var ctx = ui.previewCanvas.getContext('2d');
-                    ctx.drawImage(canvas, 0, 0);
+                    ui.previewCanvas.getContext('2d').drawImage(canvas, 0, 0);
                 }, 0);
             });
-            updateClass();
+            layerRoot.updateClass();
         };
-        ui.save = function (filename) {
-            saveAs(new Blob([
-                dataSchemeURIToArrayBuffer(ui.previewCanvas.toDataURL())
-            ], {
-                type: 'image/png'
-            }), filename);
-            return true;
-        };
-        ui.showReadme = document.getElementById('show-readme');
+        ui.save = function (filename) { return saveAs(new Blob([
+            dataSchemeURIToArrayBuffer(ui.previewCanvas.toDataURL())
+        ], { type: 'image/png' }), filename); };
+        elem = document.getElementById('show-readme');
+        if (elem instanceof HTMLButtonElement) {
+            ui.showReadme = elem;
+        }
+        else {
+            throw new Error('element not found: #show-readme');
+        }
         ui.showReadme.addEventListener('click', function (e) {
             var w = window.open('', null);
             w.document.body.innerHTML = '<title>Readme - PSDTool</title><pre style="font: 12pt/1.7 monospace;"></pre>';
             w.document.querySelector('pre').textContent = psdRoot.Readme;
         }, false);
         jQuery('#main').on('splitpaneresize', resized).splitPane();
-        ui.invertInput = document.getElementById('invert-input');
-        ui.invertInput.addEventListener('click', function (e) {
-            ui.redraw();
-        }, false);
-        ui.fixedSide = document.getElementById('fixed-side');
-        ui.fixedSide.addEventListener('change', function (e) {
-            ui.redraw();
-        }, false);
+        ui.invertInput = getInputElement('#invert-input');
+        ui.invertInput.addEventListener('click', function (e) { return ui.redraw(); }, false);
+        elem = document.getElementById('fixed-side');
+        if (elem instanceof HTMLSelectElement) {
+            ui.fixedSide = elem;
+        }
+        else {
+            throw new Error('element not found: #fixed-side');
+        }
+        ui.fixedSide.addEventListener('change', function (e) { return ui.redraw(); }, false);
         var lastPx;
-        ui.maxPixels = document.getElementById('max-pixels');
+        ui.maxPixels = getInputElement('#max-pixels');
         ui.maxPixels.addEventListener('blur', function (e) {
             var v = normalizeNumber(ui.maxPixels.value);
             if (v === lastPx) {
@@ -955,9 +912,15 @@
             ui.maxPixels.value = v;
             ui.redraw();
         }, false);
-        ui.seqDlPrefix = document.getElementById('seq-dl-prefix');
-        ui.seqDlNum = document.getElementById('seq-dl-num');
-        ui.seqDl = document.getElementById('seq-dl');
+        ui.seqDlPrefix = getInputElement('#seq-dl-prefix');
+        ui.seqDlNum = getInputElement('#seq-dl-num');
+        elem = document.getElementById('seq-dl');
+        if (elem instanceof HTMLButtonElement) {
+            ui.seqDl = elem;
+        }
+        else {
+            throw new Error('element not found: #seq-dl');
+        }
         ui.seqDl.addEventListener('click', function (e) {
             var prefix = ui.seqDlPrefix.value;
             if (ui.seqDlNum.value === '') {
@@ -969,33 +932,48 @@
                 num = 0;
             }
             if (ui.save(prefix + ('0000' + num).slice(-4) + '.png')) {
-                ui.seqDlNum.value = num + 1;
+                ui.seqDlNum.value = (num + 1).toString();
             }
         }, false);
         Mousetrap.pause();
     }
-    function enterReaderMode(state, filename) {
+    function enterReaderMode(state, filter, filename) {
         if (!ui.previewBackground.classList.contains('reader')) {
             ui.previewBackground.classList.add('reader');
-            ui.normalModeState = serializeCheckState(true);
+            ui.normalModeState = layerRoot.serialize(true);
         }
-        deserializeCheckState(state);
+        if (!filter) {
+            layerRoot.deserialize(state);
+        }
+        else {
+            layerRoot.deserializePartial(ui.normalModeState, state, filter);
+        }
         if (filename) {
             ui.previewCanvas.setAttribute('data-filename', filename);
         }
         ui.redraw();
     }
-    function leaveReaderMode(state) {
+    function leaveReaderMode(state, filter) {
         if (ui.previewBackground.classList.contains('reader')) {
             ui.previewBackground.classList.remove('reader');
         }
         if (state) {
             ui.previewCanvas.removeAttribute('data-filename');
-            deserializeCheckState(state);
+            if (!filter) {
+                layerRoot.deserialize(state);
+            }
+            else {
+                if (ui.normalModeState) {
+                    layerRoot.deserializePartial(ui.normalModeState, state, filter);
+                }
+                else {
+                    layerRoot.deserializePartial(undefined, state, filter);
+                }
+            }
         }
         else if (ui.normalModeState) {
             ui.previewCanvas.removeAttribute('data-filename');
-            deserializeCheckState(ui.normalModeState);
+            layerRoot.deserialize(ui.normalModeState);
         }
         else {
             return;
@@ -1033,535 +1011,12 @@
             return false;
         }, false);
         var f = dz.querySelector('input[type=file]');
-        if (f) {
+        if (f instanceof HTMLInputElement) {
             f.addEventListener('change', function (e) {
                 loader(f.files);
                 f.value = null;
             }, false);
         }
-    }
-    function encodeLayerName(s) {
-        return s.replace(/[\x00-\x1f\x22\x25\x27\x2f\x5c\x7e\x7f]/g, function (m) {
-            return '%' + ('0' + m[0].charCodeAt(0).toString(16)).slice(-2);
-        });
-    }
-    function decodeLayerName(s) {
-        return decodeURIComponent(s);
-    }
-    function buildLayerTree(renderer, redraw) {
-        var path = [];
-        function r(ul, n) {
-            path.push(encodeLayerName(n.layer.Name));
-            var li = document.createElement('li');
-            if (n.layer.Folder) {
-                li.classList.add('psdtool-folder');
-            }
-            var prop = buildLayerProp(n);
-            var input = prop.querySelector('.psdtool-layer-visible');
-            input.setAttribute('data-fullpath', path.join('/'));
-            n.userData = {
-                li: li,
-                input: input,
-            };
-            n.getVisibleState = function () { return input.checked; };
-            n.setVisibleState = function (v) { input.checked = v; };
-            input.addEventListener('click', function () {
-                for (var p = n.parent; p; p = p.parent) {
-                    p.visible = true;
-                }
-                if (n.clippedBy) {
-                    n.clippedBy.visible = true;
-                }
-                redraw();
-            }, false);
-            li.appendChild(prop);
-            var cul = document.createElement('ul');
-            for (var i = n.children.length - 1; i >= 0; --i) {
-                r(cul, n.children[i]);
-            }
-            li.appendChild(cul);
-            ul.appendChild(li);
-            path.pop();
-        }
-        var ul = document.getElementById('layer-tree');
-        removeAllChild(ul);
-        for (var i = renderer.StateTreeRoot.children.length - 1; i >= 0; --i) {
-            r(ul, renderer.StateTreeRoot.children[i]);
-        }
-        normalizeCheckState();
-    }
-    function buildLayerProp(n) {
-        var name = document.createElement('label');
-        var visible = document.createElement('input');
-        var layerName = n.layer.Name;
-        if (!ui.optionSafeMode.checked) {
-            switch (layerName.charAt(0)) {
-                case '!':
-                    visible.className = 'psdtool-layer-visible psdtool-layer-force-visible';
-                    visible.name = n.id;
-                    visible.type = 'checkbox';
-                    visible.checked = true;
-                    visible.disabled = true;
-                    visible.style.display = 'none';
-                    layerName = layerName.substring(1);
-                    break;
-                case '*':
-                    visible.className = 'psdtool-layer-visible psdtool-layer-radio';
-                    visible.name = 'r_' + n.parent.id;
-                    visible.type = 'radio';
-                    visible.checked = n.layer.Visible;
-                    layerName = layerName.substring(1);
-                    break;
-                default:
-                    visible.className = 'psdtool-layer-visible';
-                    visible.name = n.id;
-                    visible.type = 'checkbox';
-                    visible.checked = n.layer.Visible;
-                    break;
-            }
-        }
-        else {
-            visible.className = 'psdtool-layer-visible';
-            visible.name = n.id;
-            visible.type = 'checkbox';
-            visible.checked = n.layer.Visible;
-        }
-        visible.setAttribute('data-name', layerName);
-        name.appendChild(visible);
-        if (n.layer.Clipping) {
-            var clip = document.createElement('img');
-            clip.className = 'psdtool-clipped-mark';
-            clip.src = 'img/clipped.svg';
-            clip.alt = 'clipped mark';
-            name.appendChild(clip);
-        }
-        if (n.layer.Folder) {
-            var icon = document.createElement('span');
-            icon.className = 'psdtool-icon glyphicon glyphicon-folder-open';
-            icon.setAttribute('aria-hidden', 'true');
-            name.appendChild(icon);
-        }
-        else {
-            var thumb = document.createElement('canvas');
-            thumb.className = 'psdtool-thumbnail';
-            thumb.width = 96;
-            thumb.height = 96;
-            if (n.layer.Canvas) {
-                var w = n.layer.Width, h = n.layer.Height;
-                if (w > h) {
-                    w = thumb.width;
-                    h = thumb.width / n.layer.Width * h;
-                }
-                else {
-                    h = thumb.height;
-                    w = thumb.height / n.layer.Height * w;
-                }
-                var ctx = thumb.getContext('2d');
-                ctx.drawImage(n.layer.Canvas, (thumb.width - w) / 2, (thumb.height - h) / 2, w, h);
-            }
-            name.appendChild(thumb);
-        }
-        name.appendChild(document.createTextNode(layerName));
-        var div = document.createElement('div');
-        div.className = 'psdtool-layer-name';
-        div.appendChild(name);
-        return div;
-    }
-    function normalizeCheckState() {
-        var ul = document.getElementById('layer-tree');
-        var elems = ul.querySelectorAll('.psdtool-layer-force-visible');
-        for (var i = 0; i < elems.length; ++i) {
-            elems[i].checked = true;
-        }
-        var set = {};
-        var radios = ul.querySelectorAll('.psdtool-layer-radio');
-        for (var i = 0; i < radios.length; ++i) {
-            if (radios[i].name in set) {
-                continue;
-            }
-            set[radios[i].name] = 1;
-            var rinShibuyas = ul.querySelectorAll('.psdtool-layer-radio[name="' + radios[i].name + '"]:checked');
-            if (!rinShibuyas.length) {
-                radios[i].checked = true;
-                continue;
-            }
-        }
-    }
-    function clearCheckState() {
-        var elems = document.querySelectorAll('#layer-tree .psdtool-layer-visible:checked');
-        for (var i = 0; i < elems.length; ++i) {
-            elems[i].checked = false;
-        }
-        normalizeCheckState();
-    }
-    function serializeCheckState(allLayer) {
-        var elems = document.querySelectorAll('#layer-tree .psdtool-layer-visible:checked');
-        var i, s, path = [], pathMap = {};
-        for (i = 0; i < elems.length; ++i) {
-            s = elems[i].getAttribute('data-fullpath');
-            path.push({
-                s: s,
-                ss: s + '/',
-                i: i
-            });
-            pathMap[s] = true;
-        }
-        if (allLayer) {
-            for (i = 0; i < path.length; ++i) {
-                path[i] = '/' + path[i].s;
-            }
-            return path.join('\n');
-        }
-        path.sort(function (a, b) {
-            return a.ss > b.ss ? 1 : a.ss < b.ss ? -1 : 0;
-        });
-        var j, parts;
-        for (i = 0; i < path.length; ++i) {
-            // remove hidden layer
-            // TODO: need more better handing for clipping masked layer
-            parts = path[i].s.split('/');
-            for (j = 0; j < parts.length; ++j) {
-                if (!pathMap[parts.slice(0, j + 1).join('/')]) {
-                    path.splice(i--, 1);
-                    j = -1;
-                    break;
-                }
-            }
-            // remove duplicated entry
-            if (j !== -1 && i > 0 && path[i].ss.indexOf(path[i - 1].ss) === 0) {
-                path.splice(--i, 1);
-            }
-        }
-        path.sort(function (a, b) {
-            return a.i > b.i ? 1 : a.i < b.i ? -1 : 0;
-        });
-        for (i = 0; i < path.length; ++i) {
-            path[i] = path[i].s;
-        }
-        return path.join('\n');
-    }
-    function deserializeCheckState(state) {
-        function buildStateTree(state) {
-            var allLayer = state.charAt(0) === '/';
-            var stateTree = {
-                allLayer: allLayer,
-                children: {}
-            };
-            var i, j, obj, node, parts, part;
-            var lines = state.replace(/\r/g, '').split('\n');
-            for (i = 0; i < lines.length; ++i) {
-                parts = lines[i].split('/');
-                for (j = allLayer ? 1 : 0, node = stateTree; j < parts.length; ++j) {
-                    part = decodeLayerName(parts[j]);
-                    if (!(part in node.children)) {
-                        obj = {
-                            children: {}
-                        };
-                        if (!allLayer || (allLayer && j === parts.length - 1)) {
-                            obj.checked = true;
-                        }
-                        node.children[part] = obj;
-                    }
-                    node = node.children[part];
-                }
-            }
-            return stateTree;
-        }
-        function apply(stateNode, n, allLayer) {
-            if (allLayer === undefined) {
-                allLayer = stateNode.allLayer;
-                if (allLayer) {
-                    clearCheckState();
-                }
-            }
-            var cn, stateChild, founds = {};
-            for (var i = 0; i < n.children.length; ++i) {
-                cn = n.children[i];
-                if (cn.layer.Name in founds) {
-                    throw new Error('found more than one same name layer: ' + cn.layer.Name);
-                }
-                founds[cn.layer.Name] = true;
-                stateChild = stateNode.children[cn.layer.Name];
-                if (!stateChild) {
-                    cn.visible = false;
-                    continue;
-                }
-                if ('checked' in stateChild) {
-                    cn.visible = stateChild.checked;
-                }
-                if (allLayer || stateChild.checked) {
-                    apply(stateChild, cn, allLayer);
-                }
-            }
-        }
-        var old = serializeCheckState(true);
-        try {
-            apply(buildStateTree(state), renderer.StateTreeRoot);
-            normalizeCheckState();
-        }
-        catch (e) {
-            apply(buildStateTree(old), renderer.StateTreeRoot);
-            normalizeCheckState();
-            throw e;
-        }
-    }
-    function buildPFV(json) {
-        if (json.length !== 1) {
-            throw new Error('sorry but favorite tree data is broken');
-        }
-        var path = [], lines = ['[PSDToolFavorites-v1]'];
-        function r(children) {
-            for (var i = 0, item = void 0; i < children.length; ++i) {
-                item = children[i];
-                path.push(encodeLayerName(item.text));
-                switch (item.type) {
-                    case 'root':
-                        lines.push('root-name/' + path[0]);
-                        lines.push('');
-                        path.pop();
-                        r(item.children);
-                        path.push('');
-                        break;
-                    case 'folder':
-                        if (item.children.length) {
-                            r(item.children);
-                        }
-                        else {
-                            lines.push('//' + path.join('/') + '~folder');
-                            lines.push('');
-                        }
-                        break;
-                    case 'filter':
-                        lines.push('//' + path.join('/') + '~filter');
-                        lines.push(item.data.value);
-                        lines.push('');
-                        r(item.children);
-                        break;
-                    case 'item':
-                        lines.push('//' + path.join('/'));
-                        lines.push(item.data.value);
-                        lines.push('');
-                        break;
-                }
-                path.pop();
-            }
-        }
-        r(json);
-        return lines.join('\n');
-    }
-    function countPFVEntries(pfv) {
-        var lines = pfv.replace(/\r/g, '').split('\n'), c = 0;
-        for (var i = 1; i < lines.length; ++i) {
-            if (lines[i].length > 2 && lines[i].substring(0, 2) === '//') {
-                ++c;
-            }
-        }
-        return c;
-    }
-    // https://gist.github.com/boushley/5471599
-    function arrayBufferToString(ab) {
-        var data = new Uint8Array(ab);
-        // If we have a BOM skip it
-        var s = '', i = 0, c = 0, c2 = 0, c3 = 0;
-        if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
-            i = 3;
-        }
-        while (i < data.length) {
-            c = data[i];
-            if (c < 128) {
-                s += String.fromCharCode(c);
-                i++;
-            }
-            else if (c > 191 && c < 224) {
-                if (i + 1 >= data.length) {
-                    throw 'UTF-8 Decode failed. Two byte character was truncated.';
-                }
-                c2 = data[i + 1];
-                s += String.fromCharCode(((c & 31) << 6) | (c2 & 63));
-                i += 2;
-            }
-            else {
-                if (i + 2 >= data.length) {
-                    throw 'UTF-8 Decode failed. Multi byte character was truncated.';
-                }
-                c2 = data[i + 1];
-                c3 = data[i + 2];
-                s += String.fromCharCode(((c & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
-                i += 3;
-            }
-        }
-        return s;
-    }
-    function loadPFVFromDroppedFile() {
-        var deferred = m.deferred();
-        setTimeout(function () {
-            if (!droppedPFV) {
-                deferred.resolve(false);
-                return;
-            }
-            loadAsBlob(function () { return undefined; }, droppedPFV).then(function (buffer) {
-                var fr = new FileReader();
-                fr.onload = function () {
-                    loadPFV(arrayBufferToString(fr.result));
-                    deferred.resolve(true);
-                };
-                fr.readAsArrayBuffer(buffer.buffer);
-            }).then(deferred.resolve.bind(deferred), deferred.reject.bind(deferred));
-        }, 0);
-        return deferred.promise;
-    }
-    function loadPFVFromString(s) {
-        var deferred = m.deferred();
-        setTimeout(function () {
-            if (!s) {
-                deferred.resolve(false);
-                return;
-            }
-            try {
-                loadPFV(s);
-                deferred.resolve(true);
-            }
-            catch (e) {
-                deferred.reject(e);
-            }
-        }, 0);
-        return deferred.promise;
-    }
-    function loadPFVFromLocalStorage(hash) {
-        var deferred = m.deferred();
-        var pfv = [];
-        if ('psdtool_pfv' in localStorage) {
-            pfv = JSON.parse(localStorage['psdtool_pfv']);
-        }
-        for (var i = pfv.length - 1; i >= 0; --i) {
-            if (pfv[i].hash === hash) {
-                loadPFVFromString(pfv[i].data).then(function () {
-                    uniqueId = pfv[i].id;
-                    deferred.resolve(true);
-                }, function (e) {
-                    deferred.reject(e);
-                });
-                return deferred.promise;
-            }
-        }
-        setTimeout(function () {
-            deferred.resolve(false);
-        }, 0);
-        return deferred.promise;
-    }
-    function loadPFV(s) {
-        var lines = s.replace(/\r/g, '').split('\n');
-        if (lines[0] !== '[PSDToolFavorites-v1]') {
-            throw new Error('given PFV file does not have a valid header');
-        }
-        function addNode(json, name, type, data) {
-            var i, j, c, partName, nameParts = name.split('/');
-            for (i = 0, c = json; i < nameParts.length; ++i) {
-                partName = decodeLayerName(nameParts[i]);
-                for (j = 0; j < c.length; ++j) {
-                    if (c[j].text === partName) {
-                        c = c[j].children;
-                        j = -1;
-                        break;
-                    }
-                }
-                if (j !== c.length) {
-                    continue;
-                }
-                c.push({
-                    text: partName,
-                    children: []
-                });
-                if (i !== nameParts.length - 1) {
-                    c[j].type = 'folder';
-                    c[j].state = {
-                        opened: true
-                    };
-                    c = c[j].children;
-                    continue;
-                }
-                switch (type) {
-                    case 'item':
-                        c[j].type = 'item';
-                        c[j].data = {
-                            value: data
-                        };
-                        return;
-                    case 'folder':
-                        c[j].type = 'folder';
-                        c[j].state = {
-                            opened: true
-                        };
-                        return;
-                    case 'filter':
-                        c[j].type = 'item';
-                        c[j].data = {
-                            value: data
-                        };
-                        c[j].state = {
-                            opened: true
-                        };
-                        return;
-                    default:
-                        throw new Error('unknown node type: ' + type);
-                }
-            }
-        }
-        var json = [{
-                id: 'root',
-                text: ui.favoriteTreeDefaultRootName,
-                type: 'root',
-                state: {
-                    opened: true
-                },
-                children: []
-            }];
-        var setting = {
-            'root-name': ui.favoriteTreeDefaultRootName
-        };
-        var name, type, data = [], first = true, value;
-        for (var i = 1; i < lines.length; ++i) {
-            if (lines[i] === '') {
-                continue;
-            }
-            if (lines[i].length > 2 && lines[i].substring(0, 2) === '//') {
-                if (first) {
-                    json[0].text = setting['root-name'];
-                    first = false;
-                }
-                else {
-                    addNode(json, encodeLayerName(setting['root-name']) + '/' + name, type, data.join('\n'));
-                }
-                name = lines[i].substring(2);
-                if (name.indexOf('~') !== -1) {
-                    data = name.split('~');
-                    name = data[0];
-                    type = data[1];
-                }
-                else {
-                    type = 'item';
-                }
-                data = [];
-                continue;
-            }
-            if (first) {
-                name = lines[i].substring(0, lines[i].indexOf('/'));
-                value = decodeLayerName(lines[i].substring(name.length + 1));
-                if (value) {
-                    setting[name] = value;
-                }
-            }
-            else {
-                data.push(lines[i]);
-            }
-        }
-        if (first) {
-            json[0].text = setting['root-name'];
-        }
-        else {
-            addNode(json, encodeLayerName(setting['root-name']) + '/' + name, type, data.join('\n'));
-        }
-        initFavoriteTree(json);
     }
     document.addEventListener('DOMContentLoaded', init, false);
 })();

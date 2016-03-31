@@ -209,7 +209,6 @@ var Favorite;
                 case 'copy_node':
                     return node.type !== 'root' && parent.id !== '#' && parent.type !== 'item';
             }
-            return false;
         };
         Favorite.prototype.clearSelection = function () {
             if (this.jst.get_top_selected().length === 0) {

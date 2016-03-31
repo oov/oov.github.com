@@ -58,13 +58,6 @@ var LayerTree;
                 return '%' + ('0' + m[0].charCodeAt(0).toString(16)).slice(-2);
             }) + (index === 0 ? '' : '\\' + index.toString());
         };
-        Node.decodeLayerName = function (s) {
-            var p = s.split('\\');
-            return {
-                name: decodeURIComponent(p[0]),
-                index: p.length === 1 ? 0 : parseInt(p[1], 10)
-            };
-        };
         return Node;
     }());
     LayerTree_1.Node = Node;

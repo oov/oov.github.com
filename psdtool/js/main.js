@@ -238,16 +238,17 @@
     }
     function loadAsBlob(progress, file_or_url) {
         progress('prepare', 0);
-        if (typeof file_or_url === 'string') {
-            return loadAsBlobFromString(progress, file_or_url);
+        if (file_or_url instanceof File) {
+            var file_1 = file_or_url;
+            var deferred_1 = m.deferred();
+            setTimeout(function () { return deferred_1.resolve({
+                buffer: file_1,
+                name: file_1.name.replace(/\..*$/i, '') + '_'
+            }); }, 0);
+            return deferred_1.promise;
         }
         else {
-            var deferred = m.deferred();
-            setTimeout(function () { return deferred.resolve({
-                buffer: file_or_url,
-                name: file_or_url.name.replace(/\..*$/i, '') + '_'
-            }); }, 0);
-            return deferred.promise;
+            return loadAsBlobFromString(progress, file_or_url);
         }
     }
     function extractFilePrefixFromUrl(url) {
@@ -814,7 +815,6 @@
         });
     }
     function initUI() {
-        var _this = this;
         ui.optionAutoTrim = getInputElement('#option-auto-trim');
         ui.optionSafeMode = getInputElement('#option-safe-mode');
         // save and restore scroll position of side-body on each tab.
@@ -851,8 +851,8 @@
             throw new Error('element not found: #preview');
         }
         ui.previewCanvas.addEventListener('dragstart', function (e) {
-            var s = _this.toDataURL();
-            var name = _this.getAttribute('data-filename');
+            var s = ui.previewCanvas.toDataURL();
+            var name = ui.previewCanvas.getAttribute('data-filename');
             if (name) {
                 var p = s.indexOf(';');
                 s = s.substring(0, p) + ';filename=' + encodeURIComponent(name) + s.substring(p);
@@ -1012,9 +1012,10 @@
         }, false);
         var f = dz.querySelector('input[type=file]');
         if (f instanceof HTMLInputElement) {
+            var file_2 = f;
             f.addEventListener('change', function (e) {
-                loader(f.files);
-                f.value = null;
+                loader(file_2.files);
+                file_2.value = null;
             }, false);
         }
     }

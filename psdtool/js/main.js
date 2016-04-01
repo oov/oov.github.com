@@ -522,115 +522,122 @@ var psdtool;
                 }), Main.cleanForFilename(_this.favorite.rootName) + '.pfv');
             }, false);
             document.getElementById('export-favorites-zip').addEventListener('click', function (e) {
-                var parents = [];
-                var path = [], files = [];
-                var r = function (children) {
-                    for (var _i = 0, children_1 = children; _i < children_1.length; _i++) {
-                        var item = children_1[_i];
-                        path.push(Main.cleanForFilename(item.text));
-                        switch (item.type) {
-                            case 'root':
-                                path.pop();
-                                r(item.children);
-                                path.push('');
-                                break;
-                            case 'folder':
-                                parents.unshift(item);
-                                r(item.children);
-                                parents.shift();
-                                break;
-                            case 'filter':
-                                parents.unshift(item);
-                                r(item.children);
-                                parents.shift();
-                                break;
-                            case 'item':
-                                var filter = void 0;
-                                for (var _a = 0, parents_1 = parents; _a < parents_1.length; _a++) {
-                                    var p = parents_1[_a];
-                                    if (p.type === 'filter') {
-                                        filter = p.data.value;
-                                        break;
-                                    }
-                                }
-                                if (filter) {
-                                    files.push({
-                                        name: path.join('\\') + '.png',
-                                        value: item.data.value,
-                                        filter: filter
-                                    });
-                                }
-                                else {
-                                    files.push({
-                                        name: path.join('\\') + '.png',
-                                        value: item.data.value
-                                    });
-                                }
-                                break;
-                            default:
-                                throw new Error('unknown item type: ' + item.type);
-                        }
-                        path.pop();
-                    }
-                };
-                var json = _this.favorite.json;
-                r(json);
-                var backup = _this.layerRoot.serialize(true);
-                var z = new Zipper.Zipper();
-                var prog = new ProgressDialog('Exporting...', '');
-                var aborted = false;
-                var errorHandler = function (readableMessage, err) {
-                    z.dispose(function (err) { return undefined; });
-                    console.error(err);
-                    if (!aborted) {
-                        alert(readableMessage + ': ' + err);
-                    }
-                    prog.close();
-                };
-                // it is needed to avoid alert storm when reload during exporting.
-                window.addEventListener('unload', function () { aborted = true; }, false);
-                var added = 0;
-                var addedHandler = function () {
-                    if (++added < files.length + 1) {
-                        prog.update(added / (files.length + 1), added === 1 ? 'drawing...' : '(' + added + '/' + files.length + ') ' + files[added - 1].name);
-                        return;
-                    }
-                    _this.layerRoot.deserialize(backup);
-                    prog.update(1, 'building a zip...');
-                    z.generate(function (blob) {
-                        prog.close();
-                        saveAs(blob, Main.cleanForFilename(_this.favorite.rootName) + '.zip');
-                        z.dispose(function (err) { return undefined; });
-                    }, function (e) { return errorHandler('cannot create a zip archive', e); });
-                };
-                z.init(function () {
-                    z.add('favorites.pfv', new Blob([_this.favorite.pfv], { type: 'text/plain; charset=utf-8' }), addedHandler, function (e) { return errorHandler('cannot write pfv to a zip archive', e); });
-                    var i = 0;
-                    var process = function () {
-                        if ('filter' in files[i]) {
-                            _this.layerRoot.deserializePartial('', files[i].value, files[i].filter);
-                        }
-                        else {
-                            _this.layerRoot.deserialize(files[i].value);
-                        }
-                        _this.render(function (progress, canvas) {
-                            if (progress !== 1) {
-                                return;
-                            }
-                            z.add(files[i].name, new Blob([Main.dataSchemeURIToArrayBuffer(canvas.toDataURL())], { type: 'image/png' }), addedHandler, function (e) { return errorHandler('cannot write png to a zip archive', e); });
-                            if (++i < files.length) {
-                                setTimeout(process, 0);
-                            }
-                        });
-                    };
-                    process();
-                }, function (e) { return errorHandler('cannot create a zip archive', e); });
+                _this.exportZIP(false);
+            }, false);
+            document.getElementById('export-favorites-zip-filter-solo').addEventListener('click', function (e) {
+                _this.exportZIP(true);
             }, false);
             document.getElementById('export-layer-structure').addEventListener('click', function (e) {
                 saveAs(new Blob([_this.layerRoot.text], {
                     type: 'text/plain'
                 }), 'layer.txt');
             }, false);
+        };
+        Main.prototype.exportZIP = function (filterSolo) {
+            var _this = this;
+            var parents = [];
+            var path = [], files = [];
+            var r = function (children) {
+                for (var _i = 0, children_1 = children; _i < children_1.length; _i++) {
+                    var item = children_1[_i];
+                    path.push(Main.cleanForFilename(item.text));
+                    switch (item.type) {
+                        case 'root':
+                            path.pop();
+                            r(item.children);
+                            path.push('');
+                            break;
+                        case 'folder':
+                            parents.unshift(item);
+                            r(item.children);
+                            parents.shift();
+                            break;
+                        case 'filter':
+                            parents.unshift(item);
+                            r(item.children);
+                            parents.shift();
+                            break;
+                        case 'item':
+                            var filter = void 0;
+                            for (var _a = 0, parents_1 = parents; _a < parents_1.length; _a++) {
+                                var p = parents_1[_a];
+                                if (p.type === 'filter') {
+                                    filter = p.data.value;
+                                    break;
+                                }
+                            }
+                            if (filter) {
+                                files.push({
+                                    name: path.join('\\') + '.png',
+                                    value: item.data.value,
+                                    filter: filter
+                                });
+                            }
+                            else {
+                                files.push({
+                                    name: path.join('\\') + '.png',
+                                    value: item.data.value
+                                });
+                            }
+                            break;
+                        default:
+                            throw new Error('unknown item type: ' + item.type);
+                    }
+                    path.pop();
+                }
+            };
+            var json = this.favorite.json;
+            r(json);
+            var backup = this.layerRoot.serialize(true);
+            var z = new Zipper.Zipper();
+            var prog = new ProgressDialog('Exporting...', '');
+            var aborted = false;
+            var errorHandler = function (readableMessage, err) {
+                z.dispose(function (err) { return undefined; });
+                console.error(err);
+                if (!aborted) {
+                    alert(readableMessage + ': ' + err);
+                }
+                prog.close();
+            };
+            // it is needed to avoid alert storm when reload during exporting.
+            window.addEventListener('unload', function () { aborted = true; }, false);
+            var added = 0;
+            var addedHandler = function () {
+                if (++added < files.length + 1) {
+                    prog.update(added / (files.length + 1), added === 1 ? 'drawing...' : '(' + added + '/' + files.length + ') ' + files[added - 1].name);
+                    return;
+                }
+                _this.layerRoot.deserialize(backup);
+                prog.update(1, 'building a zip...');
+                z.generate(function (blob) {
+                    prog.close();
+                    saveAs(blob, Main.cleanForFilename(_this.favorite.rootName) + '.zip');
+                    z.dispose(function (err) { return undefined; });
+                }, function (e) { return errorHandler('cannot create a zip archive', e); });
+            };
+            z.init(function () {
+                z.add('favorites.pfv', new Blob([_this.favorite.pfv], { type: 'text/plain; charset=utf-8' }), addedHandler, function (e) { return errorHandler('cannot write pfv to a zip archive', e); });
+                var i = 0;
+                var process = function () {
+                    if ('filter' in files[i]) {
+                        _this.layerRoot.deserializePartial(filterSolo ? '' : backup, files[i].value, files[i].filter);
+                    }
+                    else {
+                        _this.layerRoot.deserialize(files[i].value);
+                    }
+                    _this.render(function (progress, canvas) {
+                        if (progress !== 1) {
+                            return;
+                        }
+                        z.add(files[i].name, new Blob([Main.dataSchemeURIToArrayBuffer(canvas.toDataURL())], { type: 'image/png' }), addedHandler, function (e) { return errorHandler('cannot write png to a zip archive', e); });
+                        if (++i < files.length) {
+                            setTimeout(process, 0);
+                        }
+                    });
+                };
+                process();
+            }, function (e) { return errorHandler('cannot create a zip archive', e); });
         };
         Main.prototype.initUI = function () {
             var _this = this;

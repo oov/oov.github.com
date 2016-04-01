@@ -732,9 +732,8 @@ var psdtool;
                 if (num < 0) {
                     num = 0;
                 }
-                if (_this.save(prefix + ('0000' + num).slice(-4) + '.png')) {
-                    _this.seqDlNum.value = (num + 1).toString();
-                }
+                _this.save(prefix + ('0000' + num).slice(-4) + '.png');
+                _this.seqDlNum.value = (num + 1).toString();
             }, false);
             Mousetrap.pause();
         };

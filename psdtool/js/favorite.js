@@ -488,6 +488,7 @@ var Favorite;
             return newText + i;
         };
         Favorite.prototype.initTree = function (data) {
+            var _this = this;
             this.jq.jstree('destroy');
             this.jq.jstree({
                 core: {
@@ -516,7 +517,7 @@ var Favorite;
                 plugins: ['types', 'dnd', 'wholerow'],
             });
             this.jst = this.jq.jstree();
-            this.jq.on('changed.jstree', this.jstSelectionChanged.bind(this));
+            this.jq.on('changed.jstree', function (e) { return _this.jstSelectionChanged(); });
             this.jq.on([
                 'set_text.jstree',
                 'create_node.jstree',
@@ -526,12 +527,12 @@ var Favorite;
                 'copy_node.jstree',
                 'cut.jstree',
                 'paste.jstree'
-            ].join(' '), this.jstChanged.bind(this));
-            this.jq.on('copy_node.jstree', this.jstCopyNode.bind(this));
-            this.jq.on('move_node.jstree', this.jstMoveNode.bind(this));
-            this.jq.on('create_node.jstree', this.jstCreateNode.bind(this));
-            this.jq.on('rename_node.jstree', this.jstRenameNode.bind(this));
-            this.jq.on('dblclick.jstree', this.jstDoubleClick.bind(this));
+            ].join(' '), function (e) { return _this.jstChanged(); });
+            this.jq.on('copy_node.jstree', function (e, data) { return _this.jstCopyNode(e, data); });
+            this.jq.on('move_node.jstree', function (e, data) { return _this.jstMoveNode(e, data); });
+            this.jq.on('create_node.jstree', function (e, data) { return _this.jstCreateNode(e, data); });
+            this.jq.on('rename_node.jstree', function (e, data) { return _this.jstRenameNode(e, data); });
+            this.jq.on('dblclick.jstree', function (e) { return _this.jstDoubleClick(e); });
         };
         Favorite.prototype.loadFromArrayBuffer = function (ab, uniqueId) {
             return this.loadFromString(arrayBufferToString(ab), uniqueId);

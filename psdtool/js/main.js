@@ -273,7 +273,7 @@ var psdtool;
                     _this.filterDialog.load(psd);
                     _this.loadRenderer(psd);
                     _this.maxPixels.value = (_this.optionAutoTrim.checked ? _this.renderer.Height : _this.renderer.CanvasHeight).toString();
-                    _this.seqDlPrefix.value = name;
+                    _this.seqDlPrefix.value = obj.name;
                     _this.seqDlNum.value = '0';
                     _this.showReadme.style.display = psd.Readme !== '' ? 'block' : 'none';
                     //  TODO: error handling

@@ -333,7 +333,7 @@ var LayerTree;
             }
             return root;
         };
-        LayerTree.prototype.apply = function (dnode, fnode) {
+        LayerTree.prototype.apply = function (dnode, fnode, allLayer) {
             var founds = {};
             var cfnode, cdnode;
             for (var _i = 0, _a = fnode.children; _i < _a.length; _i++) {
@@ -344,13 +344,15 @@ var LayerTree;
                 }
                 if (!dnode || !cdnode) {
                     cfnode.checked = false;
-                    this.apply(null, cfnode);
+                    if (allLayer) {
+                        this.apply(null, cfnode, allLayer);
+                    }
                     continue;
                 }
                 if (cdnode.checked) {
                     cfnode.checked = true;
                 }
-                this.apply(cdnode, cfnode);
+                this.apply(cdnode, cfnode, allLayer);
             }
         };
         LayerTree.prototype.deserialize = function (state) {
@@ -361,12 +363,12 @@ var LayerTree;
                     this.clear();
                     this.normalize();
                 }
-                this.apply(t, this.root);
+                this.apply(t, this.root, t.allLayer);
             }
             catch (e) {
                 this.clear();
                 this.normalize();
-                this.apply(this.buildDeserializeTree(old), this.root);
+                this.apply(this.buildDeserializeTree(old), this.root, true);
                 throw e;
             }
         };
@@ -430,7 +432,7 @@ var LayerTree;
                             this.clear();
                             this.normalize();
                         }
-                        this.apply(base, this.root);
+                        this.apply(base, this.root, base.allLayer);
                     }
                 }
                 var overlay = this.buildDeserializeTree(overlayState);
@@ -442,7 +444,7 @@ var LayerTree;
             catch (e) {
                 this.clear();
                 this.normalize();
-                this.apply(this.buildDeserializeTree(old), this.root);
+                this.apply(this.buildDeserializeTree(old), this.root, true);
                 throw e;
             }
         };

@@ -414,7 +414,7 @@ var Favorite;
                 }
                 switch (node.type) {
                     case 'item':
-                        node.data.value = original.data.value;
+                        node.data = { value: original.data.value };
                         break;
                     case 'folder':
                         for (var i = 0; i < node.children.length; ++i) {
@@ -422,6 +422,7 @@ var Favorite;
                         }
                         break;
                     case 'filter':
+                        node.data = { value: original.data.value };
                         for (var i = 0; i < node.children.length; ++i) {
                             process(_this.jst.get_node(node.children[i]), _this.jst.get_node(original.children[i]));
                         }

@@ -52,7 +52,7 @@ var psdtool;
                 var inp = e.target;
                 if (inp instanceof HTMLInputElement) {
                     var li = inp.parentElement;
-                    while (li && !(li instanceof HTMLLIElement)) {
+                    while (!(li instanceof HTMLLIElement)) {
                         li = li.parentElement;
                     }
                     var checked = inp.checked;
@@ -61,6 +61,16 @@ var psdtool;
                         var inp_1 = inputs[i];
                         if (inp_1 instanceof HTMLInputElement) {
                             inp_1.checked = checked;
+                        }
+                    }
+                    if (checked) {
+                        for (var parent_1 = li.parentElement; parent_1 !== _this.treeRoot; parent_1 = parent_1.parentElement) {
+                            if (parent_1 instanceof HTMLLIElement) {
+                                var inp_2 = parent_1.querySelector('input');
+                                if (inp_2 instanceof HTMLInputElement) {
+                                    inp_2.checked = true;
+                                }
+                            }
                         }
                     }
                     _this.updateClass();

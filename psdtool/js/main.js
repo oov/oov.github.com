@@ -386,8 +386,8 @@ var psdtool;
             });
             Mousetrap.bind('mod+b', function (e) {
                 e.preventDefault();
-                var text = prompt(document.querySelector('button[data-psdtool-tree-add-item]').getAttribute('data-caption'), '');
-                if (text === null || text === '') {
+                var text = prompt(document.querySelector('button[data-psdtool-tree-add-item]').getAttribute('data-caption'), 'New Item');
+                if (text === null) {
                     return;
                 }
                 _this.leaveReaderMode();
@@ -398,8 +398,8 @@ var psdtool;
             });
             Mousetrap.bind('mod+d', function (e) {
                 e.preventDefault();
-                var text = prompt(document.querySelector('button[data-psdtool-tree-add-folder]').getAttribute('data-caption'), '');
-                if (text === null || text === '') {
+                var text = prompt(document.querySelector('button[data-psdtool-tree-add-folder]').getAttribute('data-caption'), 'New Folder');
+                if (text === null) {
                     return;
                 }
                 _this.favorite.clearSelection();

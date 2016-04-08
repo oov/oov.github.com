@@ -1,6 +1,12 @@
 'use strict';
 var Favorite;
 (function (Favorite_1) {
+    (function (FaviewMode) {
+        FaviewMode[FaviewMode["ShowLayerTree"] = 0] = "ShowLayerTree";
+        FaviewMode[FaviewMode["ShowFaview"] = 1] = "ShowFaview";
+        FaviewMode[FaviewMode["ShowFaviewAndReadme"] = 2] = "ShowFaviewAndReadme";
+    })(Favorite_1.FaviewMode || (Favorite_1.FaviewMode = {}));
+    var FaviewMode = Favorite_1.FaviewMode;
     var JSONBuilder = (function () {
         function JSONBuilder(rootText) {
             this.json_ = [{
@@ -93,6 +99,11 @@ var Favorite;
         };
         return JSONBuilder;
     }());
+    function stringToArrayBuffer(s, complete) {
+        var fr = new FileReader();
+        fr.onload = function (e) { return complete(fr.result); };
+        fr.readAsArrayBuffer(new Blob([s]));
+    }
     // https://gist.github.com/boushley/5471599
     function arrayBufferToString(ab) {
         var data = new Uint8Array(ab);
@@ -128,14 +139,15 @@ var Favorite;
         return s;
     }
     var Favorite = (function () {
-        function Favorite(element, defaultRootName) {
+        function Favorite(element, defaultRootName, loaded) {
             this.defaultRootName = defaultRootName;
             this.psdHash = '';
+            this.faviewMode = 1 /* ShowFaview */;
             this.uniqueId = Date.now().toString() + Math.random().toString().substring(2);
             this.changedTimer = 0;
             this.tree = element;
             this.jq = jQuery(this.tree);
-            this.initTree();
+            this.initTree(loaded);
         }
         Object.defineProperty(Favorite.prototype, "rootName", {
             get: function () {
@@ -157,7 +169,52 @@ var Favorite;
         });
         Object.defineProperty(Favorite.prototype, "pfv", {
             get: function () {
-                return buildPFV(this.json);
+                var _this = this;
+                var json = this.json;
+                if (json.length !== 1) {
+                    throw new Error('sorry but favorite tree data is broken');
+                }
+                var path = [];
+                var lines = ['[PSDToolFavorites-v1]'];
+                var r = function (children) {
+                    for (var _i = 0, children_1 = children; _i < children_1.length; _i++) {
+                        var item = children_1[_i];
+                        path.push(JSONBuilder.encodeName(item.text));
+                        switch (item.type) {
+                            case 'root':
+                                lines.push('root-name/' + path[0]);
+                                lines.push('faview-mode/' + _this.faviewMode.toString());
+                                lines.push('');
+                                path.pop();
+                                r(item.children);
+                                path.push('');
+                                break;
+                            case 'folder':
+                                if (item.children.length) {
+                                    r(item.children);
+                                }
+                                else {
+                                    lines.push('//' + path.join('/') + '~folder');
+                                    lines.push('');
+                                }
+                                break;
+                            case 'filter':
+                                lines.push('//' + path.join('/') + '~filter');
+                                lines.push(item.data.value);
+                                lines.push('');
+                                r(item.children);
+                                break;
+                            case 'item':
+                                lines.push('//' + path.join('/'));
+                                lines.push(item.data.value);
+                                lines.push('');
+                                break;
+                        }
+                        path.pop();
+                    }
+                };
+                r(json);
+                return lines.join('\n');
             },
             enumerable: true,
             configurable: true
@@ -185,16 +242,17 @@ var Favorite;
         });
         Favorite.prototype.bulkRename = function (nodes) {
             var _this = this;
-            var r = function (n) {
+            var r = function (n, reserve) {
                 for (var _i = 0, n_2 = n; _i < n_2.length; _i++) {
                     var cn = n_2[_i];
                     if (cn.originalText !== cn.text) {
-                        _this.jst.rename_node(cn.id, cn.text);
+                        _this.jst.rename_node(cn.id, reserve ? '_' : cn.text);
                     }
-                    r(cn.children);
+                    r(cn.children, reserve);
                 }
             };
-            r(nodes);
+            r(nodes, true);
+            r(nodes, false);
         };
         Favorite.prototype.jstCheck = function (op, node, parent) {
             switch (op) {
@@ -218,6 +276,9 @@ var Favorite;
             if (this.onClearSelection) {
                 this.onClearSelection();
             }
+        };
+        Favorite.prototype.get = function (id) {
+            return this.jst.get_node(id);
         };
         Favorite.prototype.edit = function (id) {
             var target = id;
@@ -245,10 +306,27 @@ var Favorite;
                 target.data = n.data;
             }
         };
-        Favorite.prototype.getParents = function (n) {
+        Favorite.prototype.getFirstFilter = function (n) {
+            for (var _i = 0, _a = this.getParents(n, 'filter'); _i < _a.length; _i++) {
+                var p = _a[_i];
+                return p.data.value;
+            }
+            return '';
+        };
+        Favorite.prototype.getAncestorFilters = function (n) {
+            var r = [];
+            for (var _i = 0, _a = this.getParents(n, 'filter'); _i < _a.length; _i++) {
+                var p = _a[_i];
+                r.push(p.data.value);
+            }
+            return r;
+        };
+        Favorite.prototype.getParents = function (n, typeFilter) {
             var parents = [];
             for (var p = this.jst.get_node(n.parent); p; p = this.jst.get_node(p.parent)) {
-                parents.push(p);
+                if (typeFilter === undefined || typeFilter === p.type) {
+                    parents.push(p);
+                }
             }
             return parents;
         };
@@ -345,34 +423,6 @@ var Favorite;
             }
             return ids;
         };
-        Favorite.prototype.updateLocalStorage = function () {
-            var p = this.pfv;
-            var pfvs = [];
-            if ('psdtool_pfv' in localStorage) {
-                pfvs = JSON.parse(localStorage['psdtool_pfv']);
-            }
-            var found = false;
-            for (var i = 0; i < pfvs.length; ++i) {
-                if (pfvs[i].id === this.uniqueId && pfvs[i].hash === this.psdHash) {
-                    pfvs.splice(i, 1);
-                    found = true;
-                    break;
-                }
-            }
-            if (!found && countEntries(p) === 0) {
-                return;
-            }
-            pfvs.push({
-                id: this.uniqueId,
-                time: new Date().getTime(),
-                hash: this.psdHash,
-                data: p
-            });
-            while (pfvs.length > 8) {
-                pfvs.shift();
-            }
-            localStorage['psdtool_pfv'] = JSON.stringify(pfvs);
-        };
         Favorite.prototype.jstChanged = function () {
             var _this = this;
             if (this.changedTimer) {
@@ -380,8 +430,11 @@ var Favorite;
             }
             this.changedTimer = setTimeout(function () {
                 _this.changedTimer = 0;
+                if (_this.onModified) {
+                    _this.onModified();
+                }
                 _this.updateLocalStorage();
-            }, 100);
+            }, 32);
         };
         Favorite.prototype.jstSelectionChanged = function () {
             var selectedList = this.jst.get_top_selected(true);
@@ -488,7 +541,7 @@ var Favorite;
             }
             return newText + i;
         };
-        Favorite.prototype.initTree = function (data) {
+        Favorite.prototype.initTree = function (loaded, data) {
             var _this = this;
             this.jq.jstree('destroy');
             this.jq.jstree({
@@ -534,26 +587,84 @@ var Favorite;
             this.jq.on('create_node.jstree', function (e, data) { return _this.jstCreateNode(e, data); });
             this.jq.on('rename_node.jstree', function (e, data) { return _this.jstRenameNode(e, data); });
             this.jq.on('dblclick.jstree', function (e) { return _this.jstDoubleClick(e); });
+            this.jq.on('ready.jstree', function (e) {
+                if (loaded) {
+                    loaded();
+                }
+            });
         };
-        Favorite.prototype.loadFromArrayBuffer = function (ab, uniqueId) {
-            return this.loadFromString(arrayBufferToString(ab), uniqueId);
+        Favorite.prototype.updateLocalStorage = function () {
+            var _this = this;
+            var pfv = this.pfv;
+            stringToArrayBuffer(pfv, function (ab) {
+                var pfvs = _this.getPFVListFromLocalStorage();
+                var found = false;
+                var newUniqueId = 'pfv' + CRC32.crc32(ab).toString(16);
+                for (var i = 0; i < pfvs.length; ++i) {
+                    if (pfvs[i].id === _this.uniqueId && pfvs[i].hash === _this.psdHash) {
+                        pfvs.splice(i, 1);
+                        found = true;
+                        continue;
+                    }
+                    if (pfvs[i].id === newUniqueId && pfvs[i].hash === _this.psdHash) {
+                        pfvs.splice(i, 1);
+                    }
+                }
+                if (!found && countEntries(pfv) === 0) {
+                    return;
+                }
+                _this.uniqueId = newUniqueId;
+                pfvs.push({
+                    id: _this.uniqueId,
+                    time: new Date().getTime(),
+                    hash: _this.psdHash,
+                    data: pfv
+                });
+                while (pfvs.length > 8) {
+                    pfvs.shift();
+                }
+                localStorage['psdtool_pfv'] = JSON.stringify(pfvs);
+            });
         };
-        Favorite.prototype.loadFromLocalStorage = function (hash) {
+        Favorite.prototype.getPFVListFromLocalStorage = function () {
             if (!('psdtool_pfv' in localStorage)) {
-                return false;
+                return [];
             }
-            var pfv = JSON.parse(localStorage['psdtool_pfv']);
-            for (var i = pfv.length - 1; i >= 0; --i) {
-                if (pfv[i].hash === hash) {
-                    return this.loadFromString(pfv[i].data, pfv[i].id);
+            return JSON.parse(localStorage['psdtool_pfv']);
+        };
+        Favorite.prototype.getPFVFromLocalStorage = function (hash) {
+            var pfvs = this.getPFVListFromLocalStorage();
+            if (!pfvs.length) {
+                return null;
+            }
+            for (var i = pfvs.length - 1; i >= 0; --i) {
+                if (pfvs[i].hash === hash) {
+                    return pfvs[i];
                 }
             }
-            return false;
+        };
+        Favorite.prototype.loadFromArrayBuffer = function (ab) {
+            return this.loadFromString(arrayBufferToString(ab), 'pfv' + CRC32.crc32(ab).toString(16));
         };
         Favorite.prototype.loadFromString = function (s, uniqueId) {
-            this.initTree(this.stringToNodeTree(s));
+            var _this = this;
+            var load = function (id) {
+                var r = _this.stringToNodeTree(s);
+                _this.initTree(function () {
+                    _this.uniqueId = id;
+                    _this.faviewMode = r.faviewMode;
+                    if (_this.onLoaded) {
+                        _this.onLoaded();
+                    }
+                }, r.root);
+            };
             if (uniqueId !== undefined) {
-                this.uniqueId = uniqueId;
+                load(uniqueId);
+            }
+            else {
+                stringToArrayBuffer(s, function (ab) {
+                    load('pfv' + CRC32.crc32(ab).toString(16));
+                });
             }
             return true;
         };
@@ -564,7 +675,8 @@ var Favorite;
             }
             var jb = new JSONBuilder(this.defaultRootName);
             var setting = {
-                'root-name': this.defaultRootName
+                'root-name': this.defaultRootName,
+                'faview-mode': 2 /* ShowFaviewAndReadme */ .toString(),
             };
             var name, type, data = [], first = true, value;
             for (var _i = 0, lines_1 = lines; _i < lines_1.length; _i++) {
@@ -609,7 +721,22 @@ var Favorite;
             else {
                 jb.add(name, type, data.join('\n'));
             }
-            return jb.json;
+            var faviewMode;
+            var n = parseInt(setting['faview-mode'], 10);
+            switch (n) {
+                case 0 /* ShowLayerTree */:
+                case 1 /* ShowFaview */:
+                case 2 /* ShowFaviewAndReadme */:
+                    faviewMode = n;
+                    break;
+                default:
+                    faviewMode = 2 /* ShowFaviewAndReadme */;
+                    break;
+            }
+            return {
+                root: jb.json,
+                faviewMode: faviewMode
+            };
         };
         return Favorite;
     }());
@@ -627,49 +754,304 @@ var Favorite;
         return c;
     }
     Favorite_1.countEntries = countEntries;
-    function buildPFV(json) {
-        if (json.length !== 1) {
-            throw new Error('sorry but favorite tree data is broken');
+    var Faview = (function () {
+        function Faview(favorite, rootSel, root) {
+            var _this = this;
+            this.favorite = favorite;
+            this.rootSel = rootSel;
+            this.root = root;
+            this.closed_ = true;
+            this.treeRoots = [];
+            root.addEventListener('click', function (e) { return _this.click(e); }, false);
+            root.addEventListener('change', function (e) { return _this.change(e); }, false);
+            root.addEventListener('keyup', function (e) { return _this.keyup(e); }, false);
+            rootSel.addEventListener('change', function (e) { return _this.change(e); }, false);
+            rootSel.addEventListener('keyup', function (e) { return _this.keyup(e); }, false);
         }
-        var path = [];
-        var lines = ['[PSDToolFavorites-v1]'];
-        function r(children) {
-            for (var _i = 0, children_1 = children; _i < children_1.length; _i++) {
-                var item = children_1[_i];
-                path.push(JSONBuilder.encodeName(item.text));
-                switch (item.type) {
-                    case 'root':
-                        lines.push('root-name/' + path[0]);
-                        lines.push('');
-                        path.pop();
-                        r(item.children);
-                        path.push('');
-                        break;
-                    case 'folder':
-                        if (item.children.length) {
-                            r(item.children);
-                        }
-                        else {
-                            lines.push('//' + path.join('/') + '~folder');
-                            lines.push('');
-                        }
-                        break;
-                    case 'filter':
-                        lines.push('//' + path.join('/') + '~filter');
-                        lines.push(item.data.value);
-                        lines.push('');
-                        r(item.children);
-                        break;
-                    case 'item':
-                        lines.push('//' + path.join('/'));
-                        lines.push(item.data.value);
-                        lines.push('');
-                        break;
+        Object.defineProperty(Faview.prototype, "roots", {
+            get: function () {
+                return this.treeRoots.length;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(Faview.prototype, "closed", {
+            get: function () {
+                return this.closed_;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Faview.prototype.serialize = function () {
+            var result = {
+                rootSelectedValue: this.rootSel.value,
+                items: {}
+            };
+            for (var i = 0; i < this.treeRoots.length; ++i) {
+                var item = {};
+                var selects = this.treeRoots[i].getElementsByTagName('select');
+                for (var i_1 = 0; i_1 < selects.length; ++i_1) {
+                    item[selects[i_1].getAttribute('data-id')] = {
+                        value: selects[i_1].value,
+                        lastMod: parseInt(selects[i_1].getAttribute('data-lastmod'), 10)
+                    };
                 }
-                path.pop();
+                var opt = this.rootSel.options[i];
+                if (opt instanceof HTMLOptionElement) {
+                    result.items[opt.value] = item;
+                }
             }
+            return result;
+        };
+        Faview.prototype.deserialize = function (state) {
+            for (var i = 0; i < this.rootSel.length; ++i) {
+                var opt = this.rootSel.options[i];
+                if (opt instanceof HTMLOptionElement && opt.value in state.items) {
+                    var item = state.items[opt.value];
+                    var elems = this.treeRoots[i].getElementsByTagName('select');
+                    for (var i_2 = 0; i_2 < elems.length; ++i_2) {
+                        var elem = elems[i_2];
+                        if (elem instanceof HTMLSelectElement) {
+                            var id = elem.getAttribute('data-id');
+                            if (!(id in item)) {
+                                continue;
+                            }
+                            for (var j = 0; j < elem.length; ++j) {
+                                var opt_1 = elem.options[j];
+                                if (opt_1 instanceof HTMLOptionElement && opt_1.value === item[id].value) {
+                                    elem.selectedIndex = j;
+                                    elem.setAttribute('data-lastmod', item[id].lastMod.toString());
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (state.rootSelectedValue === opt.value) {
+                        this.rootSel.selectedIndex = i;
+                    }
+                }
+            }
+        };
+        Faview.prototype.rootChanged = function () {
+            for (var i = 0; i < this.treeRoots.length; ++i) {
+                if (this.rootSel.selectedIndex !== i) {
+                    this.treeRoots[i].style.display = 'none';
+                    continue;
+                }
+                this.treeRoots[i].style.display = 'block';
+            }
+            if (this.onRootChanged) {
+                this.onRootChanged();
+            }
+        };
+        Faview.prototype.changed = function (select) {
+            select.setAttribute('data-lastmod', Date.now().toString());
+            if (this.onChange) {
+                this.onChange(this.favorite.get(select.value));
+            }
+        };
+        Faview.prototype.keyup = function (e) {
+            var target = e.target;
+            if (target instanceof HTMLSelectElement) {
+                // it is a workaround for Firefox that does not fire change event by keyboard input
+                target.blur();
+                target.focus();
+            }
+        };
+        Faview.prototype.change = function (e) {
+            var target = e.target;
+            if (target instanceof HTMLSelectElement) {
+                if (target === this.rootSel) {
+                    this.rootChanged();
+                    return;
+                }
+                this.changed(target);
+            }
+        };
+        Faview.prototype.click = function (e) {
+            var target = e.target;
+            if (target instanceof HTMLButtonElement) {
+                var mv = 0;
+                if (target.classList.contains('psdtool-faview-prev')) {
+                    mv = -1;
+                }
+                else if (target.classList.contains('psdtool-faview-next')) {
+                    mv = 1;
+                }
+                if (mv === 0) {
+                    return;
+                }
+                var sel = target.parentElement.querySelector('select');
+                if (sel instanceof HTMLSelectElement) {
+                    sel.selectedIndex = (sel.length + sel.selectedIndex + mv) % sel.length;
+                    sel.focus();
+                    this.changed(sel);
+                }
+            }
+        };
+        Faview.prototype.addNode = function (n, ul) {
+            var li = document.createElement('li');
+            var span = document.createElement('span');
+            span.className = 'glyphicon glyphicon-asterisk';
+            li.appendChild(span);
+            li.appendChild(document.createTextNode(n.text.replace(/^\*?/, ' ')));
+            ul.appendChild(li);
+            var sel = document.createElement('select');
+            sel.className = 'form-control psdtool-faview-select';
+            sel.setAttribute('data-id', n.id);
+            var cul = document.createElement('ul');
+            var opt;
+            var firstItemId;
+            var numItems = 0, numChild = 0;
+            for (var _i = 0, _a = n.children; _i < _a.length; _i++) {
+                var cn = _a[_i];
+                if (typeof cn !== 'string') {
+                    switch (cn.type) {
+                        case 'item':
+                            opt = document.createElement('option');
+                            opt.textContent = (++numItems).toString() + '. ' + cn.text;
+                            opt.value = cn.id;
+                            if (numItems === 1) {
+                                firstItemId = cn.id;
+                            }
+                            sel.appendChild(opt);
+                            break;
+                        case 'folder':
+                        case 'filter':
+                            this.addNode(cn, cul);
+                            ++numChild;
+                            break;
+                    }
+                }
+            }
+            // show filtered entry only
+            if (numItems > 0 && this.favorite.getFirstFilter(this.favorite.get(firstItemId)) !== '') {
+                var prev = document.createElement('button');
+                prev.className = 'btn btn-default psdtool-faview-prev';
+                prev.innerHTML = '&lt;';
+                prev.tabIndex = -1;
+                var next = document.createElement('button');
+                next.className = 'btn btn-default psdtool-faview-next';
+                next.innerHTML = '&gt;';
+                next.tabIndex = -1;
+                var fs = document.createElement('div');
+                fs.className = 'psdtool-faview-select-container';
+                if (numItems === 1) {
+                    prev.disabled = true;
+                    sel.disabled = true;
+                    next.disabled = true;
+                }
+                fs.appendChild(prev);
+                fs.appendChild(sel);
+                fs.appendChild(next);
+                li.appendChild(fs);
+            }
+            if (numChild > 0) {
+                li.appendChild(cul);
+            }
+        };
+        Faview.prototype.addRoot = function (nodes) {
+            var opt;
+            for (var _i = 0, nodes_1 = nodes; _i < nodes_1.length; _i++) {
+                var n = nodes_1[_i];
+                if (n.text.length > 1 && n.text.charAt(0) === '*') {
+                    opt = document.createElement('option');
+                    opt.value = n.id;
+                    opt.textContent = n.text.substring(1);
+                    this.rootSel.appendChild(opt);
+                    var ul = document.createElement('ul');
+                    for (var _a = 0, _b = n.children; _a < _b.length; _a++) {
+                        var cn = _b[_a];
+                        if (typeof cn !== 'string') {
+                            switch (cn.type) {
+                                case 'folder':
+                                case 'filter':
+                                    this.addNode(cn, ul);
+                            }
+                        }
+                    }
+                    var li = document.createElement('li');
+                    li.style.display = 'none';
+                    li.appendChild(ul);
+                    this.treeRoots.push(li);
+                    this.root.appendChild(li);
+                    var selects = li.getElementsByTagName('select');
+                    for (var i = 0; i < selects.length; ++i) {
+                        selects[i].setAttribute('data-lastmod', (selects.length - i).toString());
+                    }
+                }
+                this.addRoot(n.children);
+            }
+        };
+        Faview.prototype.start = function (state) {
+            this.treeRoots = [];
+            this.rootSel.innerHTML = '';
+            this.root.innerHTML = '';
+            this.addRoot(this.favorite.json);
+            if (state !== undefined) {
+                this.deserialize(state);
+            }
+            if (this.roots > 0) {
+                this.rootChanged();
+            }
+            this.closed_ = false;
+        };
+        Faview.prototype.refresh = function () {
+            this.start(this.serialize());
+        };
+        Faview.prototype.getActive = function () {
+            var selects = this.treeRoots[this.rootSel.selectedIndex].getElementsByTagName('select');
+            var items = [];
+            for (var i = 0; i < selects.length; ++i) {
+                items.push({
+                    n: this.favorite.get(selects[i].value),
+                    lastMod: parseInt(selects[i].getAttribute('data-lastmod'), 10)
+                });
+            }
+            items.sort(function (a, b) { return a.lastMod === b.lastMod ? 0
+                : a.lastMod < b.lastMod ? -1 : 1; });
+            var nodes = [];
+            for (var _i = 0, items_1 = items; _i < items_1.length; _i++) {
+                var i = items_1[_i];
+                nodes.push(i.n);
+            }
+            return nodes;
+        };
+        Faview.prototype.close = function () {
+            this.treeRoots = [];
+            this.rootSel.innerHTML = '';
+            this.root.innerHTML = '';
+            this.closed_ = true;
+        };
+        return Faview;
+    }());
+    Favorite_1.Faview = Faview;
+    var CRC32 = (function () {
+        function CRC32() {
         }
-        r(json);
-        return lines.join('\n');
-    }
+        // Based on http://stackoverflow.com/a/18639999
+        CRC32.makeCRCTable = function () {
+            var c, n, k;
+            var crcTable = new Uint32Array(256);
+            for (n = 0; n < 256; n++) {
+                c = n;
+                for (k = 0; k < 8; k++) {
+                    c = ((c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1));
+                }
+                crcTable[n] = c;
+            }
+            return crcTable;
+        };
+        CRC32.crc32 = function (src) {
+            var crcTable = CRC32.crcTable;
+            var u8a = new Uint8Array(src);
+            var crc = 0 ^ (-1);
+            for (var i = 0; i < u8a.length; i++) {
+                crc = (crc >>> 8) ^ crcTable[(crc ^ u8a[i]) & 0xFF];
+            }
+            return (crc ^ (-1)) >>> 0;
+        };
+        CRC32.crcTable = CRC32.makeCRCTable();
+        return CRC32;
+    }());
 })(Favorite || (Favorite = {}));

@@ -1,6 +1,13 @@
 'use strict';
 var Renderer;
 (function (Renderer_1) {
+    (function (FlipType) {
+        FlipType[FlipType["NoFlip"] = 0] = "NoFlip";
+        FlipType[FlipType["FlipX"] = 1] = "FlipX";
+        FlipType[FlipType["FlipY"] = 2] = "FlipY";
+        FlipType[FlipType["FlipXY"] = 3] = "FlipXY";
+    })(Renderer_1.FlipType || (Renderer_1.FlipType = {}));
+    var FlipType = Renderer_1.FlipType;
     var Node = (function () {
         function Node(layer, parent) {
             var _this = this;
@@ -114,7 +121,7 @@ var Renderer;
                 }
             }
         };
-        Renderer.prototype.render = function (scale, autoTrim, mirror, callback) {
+        Renderer.prototype.render = function (scale, autoTrim, flip, callback) {
             var _this = this;
             var s = Date.now();
             this.root.nextState = '';
@@ -150,9 +157,19 @@ var Renderer;
                 var ctx = canvas.getContext('2d');
                 _this.clear(ctx);
                 ctx.save();
-                if (mirror) {
-                    ctx.translate(canvas.width, 0);
-                    ctx.scale(-1, 1);
+                switch (flip) {
+                    case 1 /* FlipX */:
+                        ctx.translate(canvas.width, 0);
+                        ctx.scale(-1, 1);
+                        break;
+                    case 2 /* FlipY */:
+                        ctx.translate(0, canvas.height);
+                        ctx.scale(1, -1);
+                        break;
+                    case 3 /* FlipXY */:
+                        ctx.translate(canvas.width, canvas.height);
+                        ctx.scale(-1, -1);
+                        break;
                 }
                 ctx.drawImage(c, autoTrim ? 0 : 0 | _this.psd.X * scale, autoTrim ? 0 : 0 | _this.psd.Y * scale);
                 ctx.restore();

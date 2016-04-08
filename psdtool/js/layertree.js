@@ -1,6 +1,13 @@
 'use strict';
 var LayerTree;
 (function (LayerTree_1) {
+    (function (FlipType) {
+        FlipType[FlipType["NoFlip"] = 0] = "NoFlip";
+        FlipType[FlipType["FlipX"] = 1] = "FlipX";
+        FlipType[FlipType["FlipY"] = 2] = "FlipY";
+        FlipType[FlipType["FlipXY"] = 3] = "FlipXY";
+    })(LayerTree_1.FlipType || (LayerTree_1.FlipType = {}));
+    var FlipType = LayerTree_1.FlipType;
     var Node = (function () {
         function Node(input, displayName_, name_, currentPath, indexInSameName, parent) {
             this.input = input;
@@ -65,8 +72,13 @@ var LayerTree;
         function LayerTree(disableExtendedFeature, treeRoot, psdRoot) {
             var _this = this;
             this.disableExtendedFeature = disableExtendedFeature;
+            this.treeRoot = treeRoot;
             this.root = new Node(null, null, '', [], 0, null);
             this.nodes = {};
+            this.flipX = [];
+            this.flipY = [];
+            this.flipXY = [];
+            this.flip_ = 0 /* NoFlip */;
             var path = [];
             var r = function (ul, n, l, parentSeqID) {
                 var indexes = {};
@@ -100,7 +112,11 @@ var LayerTree;
             };
             r(treeRoot, this.root, psdRoot.Children, -1);
             this.registerClippingGroup(psdRoot.Children);
+            if (!this.disableExtendedFeature) {
+                this.registerFlippingGroup();
+            }
             this.normalize();
+            this.flip = this.flip;
         }
         Object.defineProperty(LayerTree.prototype, "text", {
             get: function () {
@@ -121,6 +137,91 @@ var LayerTree;
             enumerable: true,
             configurable: true
         });
+        Object.defineProperty(LayerTree.prototype, "flip", {
+            get: function () { return this.flip_; },
+            set: function (v) {
+                this.flip_ = v;
+                this.treeRoot.classList.remove('psdtool-flip-x', 'psdtool-flip-y', 'psdtool-flip-xy');
+                switch (v) {
+                    case 0 /* NoFlip */:
+                        this.doFlip(this.flipX, false);
+                        this.doFlip(this.flipY, false);
+                        this.doFlip(this.flipXY, false);
+                        break;
+                    case 1 /* FlipX */:
+                        this.doFlip(this.flipY, false);
+                        this.doFlip(this.flipXY, false);
+                        this.doFlip(this.flipX, true);
+                        this.treeRoot.classList.add('psdtool-flip-x');
+                        break;
+                    case 2 /* FlipY */:
+                        this.doFlip(this.flipXY, false);
+                        this.doFlip(this.flipX, false);
+                        this.doFlip(this.flipY, true);
+                        this.treeRoot.classList.add('psdtool-flip-y');
+                        break;
+                    case 3 /* FlipXY */:
+                        this.doFlip(this.flipX, false);
+                        this.doFlip(this.flipY, false);
+                        this.doFlip(this.flipXY, true);
+                        this.treeRoot.classList.add('psdtool-flip-xy');
+                        break;
+                }
+            },
+            enumerable: true,
+            configurable: true
+        });
+        LayerTree.prototype.flipSerialize = function (root) {
+            var r = function (n, dn) {
+                var cdn;
+                for (var _i = 0, _a = n.children; _i < _a.length; _i++) {
+                    var cn = _a[_i];
+                    dn.children[cn.internalName] = cdn = {
+                        checked: cn.checked,
+                        children: {}
+                    };
+                    r(cn, cdn);
+                }
+            };
+            var result = {
+                checked: root.checked,
+                children: {},
+            };
+            r(root, result);
+            return result;
+        };
+        LayerTree.prototype.flipDeserialize = function (root, state) {
+            var r = function (n, dn) {
+                var cdn;
+                for (var _i = 0, _a = n.children; _i < _a.length; _i++) {
+                    var cn = _a[_i];
+                    if (!(cn.internalName in dn.children)) {
+                        continue;
+                    }
+                    cdn = dn.children[cn.internalName];
+                    cn.checked = cdn.checked;
+                    r(cn, cdn);
+                }
+            };
+            r(root, state);
+        };
+        LayerTree.prototype.doFlip = function (flipSet, flip) {
+            for (var _i = 0, flipSet_1 = flipSet; _i < flipSet_1.length; _i++) {
+                var fs = flipSet_1[_i];
+                if (flip && fs.normal.checked) {
+                    var state = this.flipSerialize(fs.normal);
+                    this.flipDeserialize(fs.flipped, state);
+                    fs.flipped.checked = true;
+                    fs.normal.checked = false;
+                }
+                else if (!flip && fs.flipped.checked) {
+                    var state = this.flipSerialize(fs.flipped);
+                    this.flipDeserialize(fs.normal, state);
+                    fs.normal.checked = true;
+                    fs.flipped.checked = false;
+                }
+            }
+        };
         LayerTree.prototype.createElements = function (l, parentSeqID) {
             var name = document.createElement('label');
             var input = document.createElement('input');
@@ -150,6 +251,10 @@ var LayerTree;
                 input.name = 'l' + l.SeqID;
                 input.type = 'checkbox';
                 input.checked = l.Visible;
+            }
+            if (!this.disableExtendedFeature) {
+                // trim :flipx :flipy :flipxy
+                layerName = this.parseToken(layerName).name;
             }
             input.setAttribute('data-seq', l.SeqID.toString());
             name.appendChild(input);
@@ -242,6 +347,81 @@ var LayerTree;
                     clip = [];
                 }
             }
+        };
+        LayerTree.prototype.parseToken = function (name) {
+            var token = [];
+            var p = name.split(':');
+            for (var i = p.length - 1; i >= 0; --i) {
+                switch (p[i]) {
+                    case 'flipx':
+                    case 'flipy':
+                    case 'flipxy':
+                        token.push(p.pop());
+                        break;
+                    default:
+                        return { tokens: token, name: p.join(':') };
+                }
+            }
+        };
+        LayerTree.prototype.registerFlippingGroup = function () {
+            var _this = this;
+            var r = function (n) {
+                for (var _i = 0, _a = n.children; _i < _a.length; _i++) {
+                    var cn = _a[_i];
+                    r(cn);
+                    var tokens = _this.parseToken(cn.name);
+                    var flips = [];
+                    for (var _b = 0, _c = tokens.tokens; _b < _c.length; _b++) {
+                        var tk = _c[_b];
+                        switch (tk) {
+                            case 'flipx':
+                                flips.push(1 /* FlipX */);
+                                break;
+                            case 'flipy':
+                                flips.push(2 /* FlipY */);
+                                break;
+                            case 'flipxy':
+                                flips.push(3 /* FlipXY */);
+                                break;
+                        }
+                    }
+                    if (flips.length === 0) {
+                        continue;
+                    }
+                    var o = void 0;
+                    for (var _d = 0, _e = n.children; _d < _e.length; _d++) {
+                        var on = _e[_d];
+                        if (on.name === tokens.name) {
+                            o = on;
+                            break;
+                        }
+                    }
+                    if (!o) {
+                        continue;
+                    }
+                    for (var _f = 0, flips_1 = flips; _f < flips_1.length; _f++) {
+                        var fp = flips_1[_f];
+                        switch (fp) {
+                            case 1 /* FlipX */:
+                                o.li.classList.add('psdtool-item-flip-x-orig');
+                                cn.li.classList.add('psdtool-item-flip-x');
+                                _this.flipX.push({ normal: o, flipped: cn });
+                                break;
+                            case 2 /* FlipY */:
+                                o.li.classList.add('psdtool-item-flip-y-orig');
+                                cn.li.classList.add('psdtool-item-flip-y');
+                                _this.flipY.push({ normal: o, flipped: cn });
+                                break;
+                            case 3 /* FlipXY */:
+                                o.li.classList.add('psdtool-item-flip-xy-orig');
+                                cn.li.classList.add('psdtool-item-flip-xy');
+                                _this.flipXY.push({ normal: o, flipped: cn });
+                                break;
+                        }
+                    }
+                }
+            };
+            r(this.root);
         };
         LayerTree.prototype.getAllNode = function () {
             var r = [];
@@ -364,11 +544,11 @@ var LayerTree;
                     this.normalize();
                 }
                 this.apply(t, this.root, t.allLayer);
+                this.flip = this.flip;
             }
             catch (e) {
-                this.clear();
-                this.normalize();
                 this.apply(this.buildDeserializeTree(old), this.root, true);
+                this.flip = this.flip;
                 throw e;
             }
         };
@@ -439,11 +619,11 @@ var LayerTree;
                     throw new Error('cannot use allLayer mode in LayerTree.deserializePartial');
                 }
                 this.applyWithFilter(overlay, this.buildFilterTree(filter), this.root);
+                this.flip = this.flip;
             }
             catch (e) {
-                this.clear();
-                this.normalize();
                 this.apply(this.buildDeserializeTree(old), this.root, true);
+                this.flip = this.flip;
                 throw e;
             }
         };
@@ -479,4 +659,189 @@ var LayerTree;
         return LayerTree;
     }());
     LayerTree_1.LayerTree = LayerTree;
+    var Filter = (function () {
+        function Filter(treeRoot, psdRoot) {
+            var _this = this;
+            this.root = new Node(null, null, '', [], 0, null);
+            this.nodes = {};
+            var path = [];
+            var r = function (ul, n, l) {
+                var indexes = {};
+                var founds = {};
+                for (var _i = 0, l_2 = l; _i < l_2.length; _i++) {
+                    var ll = l_2[_i];
+                    if (ll.Name in founds) {
+                        indexes[ll.SeqID] = ++founds[ll.Name];
+                    }
+                    else {
+                        indexes[ll.SeqID] = founds[ll.Name] = 0;
+                    }
+                }
+                for (var i = l.length - 1; i >= 0; --i) {
+                    var elems = _this.createElements(l[i]);
+                    var cn = new Node(elems.input, elems.text, l[i].Name, path, indexes[l[i].SeqID], n);
+                    n.children.push(cn);
+                    _this.nodes[l[i].SeqID] = cn;
+                    cn.li = document.createElement('li');
+                    var cul = document.createElement('ul');
+                    path.push(cn.internalName);
+                    r(cul, cn, l[i].Children);
+                    path.pop();
+                    cn.li.appendChild(elems.label);
+                    cn.li.appendChild(cul);
+                    ul.appendChild(cn.li);
+                }
+            };
+            r(treeRoot, this.root, psdRoot.Children);
+        }
+        Filter.prototype.createElements = function (l) {
+            var input = document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = true;
+            input.setAttribute('data-seq', l.SeqID.toString());
+            var text = document.createTextNode(l.Name);
+            var label = document.createElement('label');
+            label.appendChild(input);
+            label.appendChild(text);
+            return {
+                text: text,
+                label: label,
+                input: input
+            };
+        };
+        Filter.prototype.getAllNode = function () {
+            var r = [];
+            var enableNodes = 0;
+            var node;
+            for (var key in this.nodes) {
+                if (!this.nodes.hasOwnProperty(key)) {
+                    continue;
+                }
+                node = this.nodes[key];
+                if (!node.disabled) {
+                    ++enableNodes;
+                    if (node.checked) {
+                        r.push(node);
+                    }
+                }
+            }
+            if (r.length === enableNodes) {
+                return [];
+            }
+            return r;
+        };
+        Filter.prototype.serialize = function () {
+            var nodes = this.getAllNode();
+            if (!nodes.length) {
+                return '';
+            }
+            var i, path = [], pathMap = {};
+            for (i = 0; i < nodes.length; ++i) {
+                path.push({
+                    node: nodes[i],
+                    fullPathSlash: nodes[i].fullPath + '/',
+                    index: i
+                });
+                pathMap[nodes[i].fullPath] = true;
+            }
+            path.sort(function (a, b) {
+                return a.fullPathSlash > b.fullPathSlash ? 1 : a.fullPathSlash < b.fullPathSlash ? -1 : 0;
+            });
+            var j, parts;
+            for (i = 0; i < path.length; ++i) {
+                // remove hidden layer
+                parts = path[i].node.fullPath.split('/');
+                for (j = 0; j < parts.length; ++j) {
+                    if (!pathMap[parts.slice(0, j + 1).join('/')]) {
+                        path.splice(i--, 1);
+                        j = -1;
+                        break;
+                    }
+                }
+                // remove duplicated entry
+                if (j !== -1 && i > 0 && path[i].fullPathSlash.indexOf(path[i - 1].fullPathSlash) === 0) {
+                    path.splice(--i, 1);
+                }
+            }
+            path.sort(function (a, b) { return a.index > b.index ? -1 : a.index < b.index ? 1 : 0; });
+            parts = [];
+            for (i = 0; i < path.length; ++i) {
+                parts.push(path[i].node.fullPath);
+            }
+            return parts.join('\n');
+        };
+        Filter.prototype.buildDeserializeTree = function (state) {
+            var root = {
+                children: {},
+                checked: true
+            };
+            var node, parts;
+            var lines = state.replace(/\r/g, '').split('\n');
+            for (var _i = 0, lines_2 = lines; _i < lines_2.length; _i++) {
+                var line = lines_2[_i];
+                parts = line.split('/');
+                node = root;
+                for (var _a = 0, parts_2 = parts; _a < parts_2.length; _a++) {
+                    var part = parts_2[_a];
+                    if (!(part in node.children)) {
+                        node.children[part] = {
+                            children: {},
+                            checked: true
+                        };
+                    }
+                    node = node.children[part];
+                }
+            }
+            return root;
+        };
+        Filter.prototype.apply = function (dnode, fnode, useDisable) {
+            var founds = {};
+            var cdnode;
+            for (var _i = 0, _a = fnode.children; _i < _a.length; _i++) {
+                var cfnode = _a[_i];
+                if (cfnode.disabled) {
+                    continue;
+                }
+                founds[cfnode.internalName] = true;
+                if (dnode) {
+                    cdnode = dnode.children[cfnode.internalName];
+                }
+                if (!dnode || !cdnode) {
+                    if (useDisable) {
+                        cfnode.disabled = true;
+                    }
+                    cfnode.checked = false;
+                    this.apply(null, cfnode, useDisable);
+                    continue;
+                }
+                cfnode.checked = cdnode.checked;
+                this.apply(cdnode, cfnode, useDisable);
+            }
+        };
+        Filter.prototype.deserialize = function (state, parents) {
+            var old = this.serialize();
+            try {
+                for (var key in this.nodes) {
+                    if (!this.nodes.hasOwnProperty(key)) {
+                        continue;
+                    }
+                    this.nodes[key].disabled = false;
+                    this.nodes[key].checked = false;
+                }
+                for (var i = parents.length - 1; i >= 0; --i) {
+                    this.apply(this.buildDeserializeTree(parents[i]), this.root, true);
+                }
+                if (state === '') {
+                    return;
+                }
+                this.apply(this.buildDeserializeTree(state), this.root, false);
+            }
+            catch (e) {
+                this.apply(this.buildDeserializeTree(old), this.root, false);
+                throw e;
+            }
+        };
+        return Filter;
+    }());
+    LayerTree_1.Filter = Filter;
 })(LayerTree || (LayerTree = {}));

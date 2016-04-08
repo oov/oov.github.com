@@ -12,12 +12,12 @@ var DownScaler = (function () {
         this.dest = document.createElement('canvas');
     }
     Object.defineProperty(DownScaler.prototype, "destWidth", {
-        get: function () { return 0 | this.src.width * this.scale; },
+        get: function () { return 0 | Math.max(1, this.src.width * this.scale); },
         enumerable: true,
         configurable: true
     });
     Object.defineProperty(DownScaler.prototype, "destHeight", {
-        get: function () { return 0 | this.src.height * this.scale; },
+        get: function () { return 0 | Math.max(1, this.src.height * this.scale); },
         enumerable: true,
         configurable: true
     });

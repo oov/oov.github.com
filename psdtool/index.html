@@ -71,10 +71,10 @@
 							</p>
 							<small>
 								<p>
-									サンプルの PSD ファイルは<a href="http://seiga.nicovideo.jp/seiga/im5467479" target="_blank">こちらからダウンロードできます</a>。
+									この PSD ファイルは<a href="img/im5467479.psd">こちらからダウンロードできます</a>。このファイルは「<a href="manual.html#original-feature-asterisk" target="manual">ラジオボタン化</a>」「<a href="manual.html#original-feature-exclamation" target="manual">強制表示化</a>」「<a href="manual.html#original-feature-flip" target="manual">反転レイヤー指定</a>」を使用したサンプルになっています。
 								</p>
 								<p>
-									こちらのイラストは <a href="https://twitter.com/hrowl" target="_blank">水梟る</a>さんの「<a href="http://seiga.nicovideo.jp/seiga/im5467479" target="_blank">さとうささら立ち絵集5</a>」を許可をいただき使用させて頂いています。
+									こちらのイラストは <a href="https://twitter.com/hrowl" target="_blank">水梟る</a>さんの「<a href="http://seiga.nicovideo.jp/seiga/im5467479" target="_blank">さとうささら立ち絵集5</a>」を許可をいただき使用、再配布させて頂いています。
 								</p>
 								<p>
 									「<a href="http://satosasara.com/" target="_blank">さとうささら</a>」はトーク・ソング対応音声合成ソフトウェア「<a href="http://cevio.jp/" target="_blank">CeVIO Creative Studio</a>」のキャラクターです。
@@ -117,7 +117,7 @@
 			<div class="col-xs-12">
 				<div class="well text-center">
 					<small>
-						Created by <a href="https://github.com/oov/psdtool" target="_blank">oov</a> | Powered by <a href="http://www.gopherjs.org/" target="_blank">GopherJS</a> | Please use a <a href="https://whatbrowser.org/" target="_blank">modern browser</a> | Please listen to <a href="https://www.youtube.com/watch?v=SldjqJz3thA" target="_blank">my song</a>
+						Created by <a href="https://github.com/oov/PSDTool" target="_blank">oov</a> | Powered by <a href="http://www.gopherjs.org/" target="_blank">GopherJS</a> | Please use a <a href="https://whatbrowser.org/" target="_blank">modern browser</a> | Please listen to <a href="https://www.youtube.com/watch?v=SldjqJz3thA" target="_blank">my song</a>
 					</small>
 				</div>
 			</div>
@@ -126,7 +126,7 @@
 	<div id="main" class="split-pane fixed-left">
 		<div id="side-container" class="split-pane-component">
 			<div id="side-head">
-				<button class="btn btn-sm btn-info btn-block" id="show-readme">Readme を読む</button>
+				<button class="btn btn-sm btn-info btn-block psdtool-show-readme" data-toggle="modal" data-target="#readme-dialog">Readme を読む</button>
 				<ul id="side-tab" class="nav nav-tabs">
 					<li role="presentation" class="active"><a href="#layer-tree-pane" aria-controls="レイヤー" role="tab" data-toggle="tab">レイヤー</a></li>
 					<li role="presentation"><a href="#favs-pane" aria-controls="お気に入り" role="tab" data-toggle="tab">お気に入り</a></li>
@@ -134,14 +134,26 @@
 			</div>
 			<div id="side-body">
 				<div class="tab-content">
-					<div role="tabpanel" class="tab-pane active" id="layer-tree-pane">
+					<div role="tabpanel" class="tab-pane psdtool-tab-pane active" id="layer-tree-pane">
 						<ul id="layer-tree"></ul>
+						<div id="faview">
+							<select class="form-control" id="faview-root-node"></select>
+							<ul id="faview-tree"></ul>
+						</div>
+						<div id="layer-tree-toolbar" class="psdtool-tab-toolbar hidden clearfix">
+							<div class="btn-toolbar pull-right" role="toolbar" aria-label="お気に入り編集">
+								<div class="btn-group" role="group" aria-label="その他">
+									<button type="button" id="show-layer-tree-view" class="btn btn-default btn-sm psdtool-toggle-tree-faview">レイヤーツリーに切り替え</button>
+									<button type="button" id="show-faview" class="btn btn-default btn-sm psdtool-toggle-tree-faview">シンプルビューに切り替え</button>
+								</div>
+							</div>
+						</div>
 					</div>
-					<div role="tabpanel" class="tab-pane" id="favs-pane">
+					<div role="tabpanel" class="tab-pane psdtool-tab-pane" id="favs-pane">
 						<div id="pfv-dropzone2">
 							<div id="favorite-tree" data-root-name="お気に入り"></div>
 						</div>
-						<div id="favorite-toolbar" class="clearfix">
+						<div id="favorite-toolbar" class="psdtool-tab-toolbar clearfix">
 							<div class="btn-toolbar pull-right" role="toolbar" aria-label="お気に入り編集">
 								<div class="btn-group" role="group" aria-label="新規">
 									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-item="#favorite-tree" title="現在のレイヤー表示をお気に入りに追加(Ctrl + B / Option + B)" data-caption="現在のレイヤー表示をお気に入りに追加"><span class="glyphicon glyphicon-star"></span></button>
@@ -161,6 +173,8 @@
 											<li><a href="#" data-toggle="modal" data-target="#bulk-create-folder-dialog"><span class="glyphicon glyphicon-folder-open"></span> 一括フォルダー作成</a></li>
 											<li><a href="#" data-toggle="modal" data-target="#bulk-rename-dialog"><span class="glyphicon glyphicon-pencil"></span> 一括名前変更</a></li>
 											<li role="separator" class="divider"></li>
+											<li><a href="#" data-toggle="modal" data-target="#faview-setting-dialog"><span class="glyphicon glyphicon-th-list"></span> シンプルビュー設定</a></li>
+											<li role="separator" class="divider"></li>
 											<li><a href="#" data-toggle="modal" data-target="#import-dialog"><span class="glyphicon glyphicon-open-file"></span> インポート</a></li>
 											<li><a href="#" data-toggle="modal" data-target="#export-dialog"><span class="glyphicon glyphicon-save-file"></span> エクスポート</a></li>
 										</ul>
@@ -178,29 +192,34 @@
 				<div class="form-inline">
 					<div class="form-group psdtool-ui-item">
 						<div class="checkbox">
-							<label for="invert-input">
-								<input id="invert-input" type="checkbox"> 左右反転
-							</label>
+							<label for="flip" class="sr-only">画像の反転</label>
+							<select id="flip" class="form-control" title="画像を反転">
+								<option value="0">反転なし</option>
+								<option value="1">左右反転</option>
+								<option value="2">上下反転</option>
+								<option value="3">上下左右</option>
+							</select>
 						</div>
 					</div>
 					<div class="form-group psdtool-ui-item">
-						<label for="fixed-side">縮小</label>
+						<label for="fixed-side" class="sr-only">最大ピクセル数を指定する方向</label>
 						<select class="form-control" id="fixed-side">
 							<option value="h" selected="selected">縦</option>
 							<option value="w">横</option>
 						</select>
 						<div class="input-group">
-							<div class="input-group-addon">最大</div>
-							<input type="text" class="form-control" id="max-pixels" inputmode="numeric" value="1200">
-							<div class="input-group-addon">px</div>
+							<label for="max-pixels" class="sr-only">画像の最大ピクセル数</label>
+							<input type="text" class="form-control" id="max-pixels" inputmode="numeric" value="1200" title="このピクセル数に収まるように画像を縮小">
+							<div class="input-group-addon input-sm"><small>pxまで</small></div>
 						</div>
 					</div>
 					<div class="form-group psdtool-ui-item">
-						<label for="seq-dl-prefix">連番DL</label>
-						<input id="seq-dl-prefix" type="text" class="form-control" value="file_">
-						<label class="sr-only" for="seq-dl-num">番号</label>
-						<input type="number" class="form-control" id="seq-dl-num" inputmode="numeric" value="0">
-						<button id="seq-dl" class="btn btn-primary">.png</button>
+						<label for="seq-dl-prefix" class="sr-only">ダウンロードファイル名の接頭辞</label>
+						<input id="seq-dl-prefix" type="text" class="form-control" value="file_" title="ダウンロードする時のファイル名の接頭辞">
+						<label for="seq-dl-num" class="sr-only">ダウンロードファイル名の通し番号</label>
+						<input type="number" class="form-control" id="seq-dl-num" inputmode="numeric" value="0" title="ファイルの通し番号">
+						<label for="seq-dl" class="sr-only">ファイルをダウンロード</label>
+						<button id="seq-dl" class="btn btn-primary" title="PNG 形式で画像を保存">.png</button>
 					</div>
 				</div>
 			</div>
@@ -276,14 +295,14 @@
 					<p><small>PFV ファイルはお気に入りの情報が記録されたテキストファイルで、「インポート」を使って読み込んだりエディタで開いて直接編集したりできます。</small></p>
 					<p>
 						<div class="btn-group">
-						  <button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-zip">画像を ZIP ファイルでエクスポート</button>
-						  <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-						    <span class="caret"></span>
-						    <span class="sr-only">オプション</span>
-						  </button>
-						  <ul class="dropdown-menu">
-						    <li><a href="#" data-dismiss="modal" id="export-favorites-zip-filter-solo">フィルタリングされた項目は残ったパーツのみを出力</a></li>
-						  </ul>
+							<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-zip">画像を ZIP ファイルでエクスポート</button>
+							<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+								<span class="caret"></span>
+								<span class="sr-only">オプション</span>
+							</button>
+							<ul class="dropdown-menu">
+								<li><a href="#" data-dismiss="modal" id="export-favorites-zip-filter-solo">フィルタリングされた項目は残ったパーツのみを出力</a></li>
+							</ul>
 						</div>
 					</p>
 					<p><small>PNG ファイルと PFV ファイルを無圧縮の ZIP ファイルに書き出します。パターン数に応じて相応の時間が掛かります。画像には現在の左右反転や縮小などの設定が適用されます。</small></p>
@@ -324,8 +343,10 @@
 						お気に入りに作成したいフォルダー名を改行で区切って入力してください。
 						<br>先頭や末尾のスペース、空行などは無視されます。
 					</p>
-					<p><textarea id="bulk-create-folder-textarea" class="form-control" rows="8"></textarea></p>
-					<button type="button" class="btn btn-default" data-dismiss="modal" id="bulk-create-folder">フォルダー作成</button>
+					<p>
+						<textarea id="bulk-create-folder-textarea" class="form-control" rows="8"></textarea>
+					</p>
+					<button type="button" class="btn btn-primary" data-dismiss="modal" id="bulk-create-folder">フォルダー作成</button>
 				</div>
 			</div>
 		</div>
@@ -340,10 +361,61 @@
 				</div>
 				<div class="modal-body">
 					<p>
-						テキストを書き換えて「名前を変更」ボタンを押すと変更されます。
+						入力欄を書き換えて「名前を変更」ボタンを押すと変更されます。
+						<br> また、入力欄を空欄して名前を変更をすると、上から順番に数字が割り当てられます。
 					</p>
 					<ul id="bulk-rename-tree"></ul>
-					<button type="button" class="btn btn-default" data-dismiss="modal" id="bulk-rename">名前を変更</button>
+					<p class="form-inline">空欄には
+						<select id="rename-digits" class="form-control">
+							<option value="1">1</option>
+							<option value="2" selected>2</option>
+							<option value="3">3</option>
+							<option value="4">4</option>
+						</select>
+						桁の数字を
+						<input type="number" id="rename-start-number" inputmode="numeric" value="0" class="form-control">
+						から順番に割り当て
+					</p>
+					<button type="button" class="btn btn-primary" data-dismiss="modal" id="bulk-rename">名前を変更</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="readme-dialog" tabindex="-1" role="dialog" aria-labelledby="readme-dialog-label">
+		<div class="modal-dialog modal-lg" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="readme-dialog-label">Readme</h4>
+				</div>
+				<div class="modal-body">
+					<pre id="readme"></pre>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="modal" id="faview-setting-dialog" tabindex="-1" role="dialog" aria-labelledby="faview-setting-dialog-label">
+		<div class="modal-dialog" role="document">
+			<div class="modal-content">
+				<div class="modal-header">
+					<button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+					<h4 class="modal-title" id="faview-setting-dialog-label">シンプルビュー設定</h4>
+				</div>
+				<div class="modal-body">
+					<p><small>
+						「シンプルビュー」はレイヤーツリーの代わりに使える、シンプルな切り替え方式の表示形式です。<br>
+						これを使用するためにはフィルタリングされたお気に入りを組み立てる必要があります。<a href="manual.html#feature-faview" target="manual">詳細</a>
+					</small></p>
+					<div class="form-group">
+						<label for="faview-mode">シンプルビューが使えるお気に入りデータを読み込んだ時の動作</label>
+						<select class="form-control" id="faview-mode">
+							<option value="0">レイヤーツリーを表示</option>
+							<option value="1">シンプルビューを表示</option>
+							<option value="2">シンプルビューを表示 ＋ Readme があれば自動表示</option>
+						</select>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -358,7 +430,6 @@
 	<script src="js/downscaler.js"></script>
 	<script src="js/renderer.js"></script>
 	<script src="js/layertree.js"></script>
-	<script src="js/filter.js"></script>
 	<script src="js/favorite.js"></script>
 	<script src="js/zipper.js"></script>
 	<script src="js/main.js"></script>

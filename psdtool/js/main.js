@@ -100,20 +100,14 @@ var psdtool;
                 }
             }
             jQuery(this.dialog).on('shown.bs.modal', function (e) {
-                var parents = [];
-                for (var _i = 0, _a = _this.favorite.getParents(_this.node); _i < _a.length; _i++) {
-                    var p = _a[_i];
-                    if (p.type === 'filter') {
-                        parents.push(p.data.value);
-                    }
-                }
+                var filters = _this.favorite.getAncestorFilters(_this.node);
                 if (_this.node.type === 'filter') {
                     _this.useFilter.checked = true;
-                    _this.root.deserialize(_this.node.data.value, parents);
+                    _this.root.deserialize(_this.node.data.value, filters);
                 }
                 else {
                     _this.useFilter.checked = false;
-                    _this.root.deserialize('', parents);
+                    _this.root.deserialize('', filters);
                 }
                 _this.updateClass();
             });
@@ -180,6 +174,41 @@ var psdtool;
         };
         return FilterDialog;
     }());
+    var FaviewSettingDialog = (function () {
+        function FaviewSettingDialog(favorite) {
+            var _this = this;
+            this.favorite = favorite;
+            {
+                var faviewMode = document.getElementById('faview-mode');
+                if (faviewMode instanceof HTMLSelectElement) {
+                    this.faviewMode = faviewMode;
+                }
+                else {
+                    throw new Error('#faview-mode is not a SELECT element');
+                }
+            }
+            this.faviewMode.addEventListener('change', function (e) { return _this.update(); });
+            {
+                var dialog = document.getElementById('faview-setting-dialog');
+                if (dialog instanceof HTMLDivElement) {
+                    this.dialog = dialog;
+                }
+                else {
+                    throw new Error('#faview-setting-dialog is not an DIV element');
+                }
+            }
+            jQuery(this.dialog).on('shown.bs.modal', function (e) {
+                _this.faviewMode.selectedIndex = _this.favorite.faviewMode;
+            });
+        }
+        FaviewSettingDialog.prototype.update = function () {
+            this.favorite.faviewMode = this.faviewMode.selectedIndex;
+            if (this.onUpdate) {
+                this.onUpdate();
+            }
+        };
+        return FaviewSettingDialog;
+    }());
     var Main = (function () {
         function Main() {
             this.sideBodyScrollPos = {};
@@ -226,18 +255,32 @@ var psdtool;
             var mainContainer = document.getElementById('main-container');
             var miscUi = document.getElementById('misc-ui');
             var previewContainer = document.getElementById('preview-container');
+            var old = previewContainer.style.display;
             previewContainer.style.display = 'none';
             previewContainer.style.width = mainContainer.clientWidth + 'px';
             previewContainer.style.height = (mainContainer.clientHeight - miscUi.offsetHeight) + 'px';
-            previewContainer.style.display = 'block';
+            previewContainer.style.display = old;
             var sideContainer = document.getElementById('side-container');
             var sideHead = document.getElementById('side-head');
             var sideBody = document.getElementById('side-body');
+            old = sideBody.style.display;
             sideBody.style.display = 'none';
             sideBody.style.width = sideContainer.clientWidth + 'px';
             sideBody.style.height = (sideContainer.clientHeight - sideHead.offsetHeight) + 'px';
-            sideBody.style.display = 'block';
-            document.getElementById('favorite-tree').style.paddingTop = this.favoriteToolbar.clientHeight + 'px';
+            sideBody.style.display = old;
+            var toolbars = document.querySelectorAll('.psdtool-tab-toolbar');
+            for (var i = 0; i < toolbars.length; ++i) {
+                var elem = toolbars[i];
+                if (elem instanceof HTMLElement) {
+                    var p = elem.parentElement;
+                    while (!p.classList.contains('psdtool-tab-pane') && p) {
+                        p = p.parentElement;
+                    }
+                    if (p) {
+                        p.style.paddingTop = elem.clientHeight + 'px';
+                    }
+                }
+            }
         };
         Main.prototype.loadAndParse = function (input) {
             var _this = this;
@@ -279,13 +322,26 @@ var psdtool;
             var deferred = m.deferred();
             PSD.parseWorker(obj.buffer, progress, function (psd) {
                 try {
+                    _this.psdRoot = psd;
                     _this.loadLayerTree(psd);
                     _this.filterDialog.load(psd);
                     _this.loadRenderer(psd);
                     _this.maxPixels.value = (_this.optionAutoTrim.checked ? _this.renderer.Height : _this.renderer.CanvasHeight).toString();
                     _this.seqDlPrefix.value = obj.name;
                     _this.seqDlNum.value = '0';
-                    _this.showReadme.style.display = psd.Readme !== '' ? 'block' : 'none';
+                    var readmeButtons = document.querySelectorAll('.psdtool-show-readme');
+                    for (var i = 0, elem = void 0; i < readmeButtons.length; ++i) {
+                        elem = readmeButtons[i];
+                        if (elem instanceof HTMLElement) {
+                            if (psd.Readme !== '') {
+                                elem.classList.remove('hidden');
+                            }
+                            else {
+                                elem.classList.add('hidden');
+                            }
+                        }
+                    }
+                    document.getElementById('readme').textContent = psd.Readme;
                     //  TODO: error handling
                     _this.favorite.psdHash = psd.Hash;
                     if (_this.droppedPFV) {
@@ -296,13 +352,14 @@ var psdtool;
                         fr_1.readAsArrayBuffer(_this.droppedPFV);
                     }
                     else {
-                        if (!_this.favorite.loadFromLocalStorage(psd.Hash)) {
-                            if (psd.PFV !== '') {
-                                _this.favorite.loadFromString(psd.PFV);
-                            }
+                        var pfvData = _this.favorite.getPFVFromLocalStorage(psd.Hash);
+                        if (pfvData && pfvData.time / 1000 > psd.PFVModDate) {
+                            _this.favorite.loadFromString(pfvData.data, pfvData.id);
+                        }
+                        else if (psd.PFV) {
+                            _this.favorite.loadFromString(psd.PFV);
                         }
                     }
-                    _this.psdRoot = psd;
                     _this.redraw();
                     deferred.resolve(true);
                 }
@@ -338,6 +395,30 @@ var psdtool;
         Main.prototype.initFavoriteUI = function () {
             var _this = this;
             this.favorite = new Favorite.Favorite(document.getElementById('favorite-tree'), document.getElementById('favorite-tree').getAttribute('data-root-name'));
+            this.favorite.onModified = function () {
+                _this.needRefreshFaview = true;
+            };
+            this.favorite.onLoaded = function () {
+                _this.startFaview();
+                switch (_this.favorite.faviewMode) {
+                    case 0 /* ShowLayerTree */:
+                        _this.toogleTreeFaview(false);
+                        break;
+                    case 1 /* ShowFaview */:
+                        if (!_this.faview.closed) {
+                            _this.toogleTreeFaview(true);
+                        }
+                        break;
+                    case 2 /* ShowFaviewAndReadme */:
+                        if (!_this.faview.closed) {
+                            _this.toogleTreeFaview(true);
+                            if (_this.psdRoot.Readme !== '') {
+                                jQuery('#readme-dialog').modal('show');
+                            }
+                        }
+                        break;
+                }
+            };
             this.favorite.onClearSelection = function () { return _this.leaveReaderMode(); };
             this.favorite.onSelect = function (item) {
                 if (item.type !== 'item') {
@@ -345,15 +426,7 @@ var psdtool;
                     return;
                 }
                 try {
-                    var filter = void 0;
-                    for (var _i = 0, _a = _this.favorite.getParents(item); _i < _a.length; _i++) {
-                        var p = _a[_i];
-                        if (p.type === 'filter') {
-                            filter = p.data.value;
-                            break;
-                        }
-                    }
-                    _this.enterReaderMode(item.data.value, filter, item.text + '.png');
+                    _this.enterReaderMode(item.data.value, _this.favorite.getFirstFilter(item), item.text + '.png');
                 }
                 catch (e) {
                     console.error(e);
@@ -364,15 +437,7 @@ var psdtool;
                 try {
                     switch (item.type) {
                         case 'item':
-                            var filter = void 0;
-                            for (var _i = 0, _a = _this.favorite.getParents(item); _i < _a.length; _i++) {
-                                var p = _a[_i];
-                                if (p.type === 'filter') {
-                                    filter = p.data.value;
-                                    break;
-                                }
-                            }
-                            _this.leaveReaderMode(item.data.value, filter);
+                            _this.leaveReaderMode(item.data.value, _this.favorite.getFirstFilter(item));
                             break;
                         case 'folder':
                         case 'filter':
@@ -389,6 +454,7 @@ var psdtool;
             this.filterDialog.onUpdate = function (id, type, data) {
                 _this.favorite.update({ id: id, type: type, data: { value: data } });
                 _this.favorite.updateLocalStorage();
+                _this.needRefreshFaview = true;
             };
             jQuery('button[data-psdtool-tree-add-item]').on('click', function (e) {
                 _this.leaveReaderMode();
@@ -435,6 +501,11 @@ var psdtool;
                         var elems = document.querySelectorAll('input[name="' + target.name + '"].psdtool-layer-radio');
                         for (var i = 0; i < elems.length; ++i) {
                             n = _this.layerRoot.nodes[parseInt(elems[i].getAttribute('data-seq'), 10)];
+                            if (n.li.classList.contains('psdtool-item-flip-x') ||
+                                n.li.classList.contains('psdtool-item-flip-y') ||
+                                n.li.classList.contains('psdtool-item-flip-xy')) {
+                                continue;
+                            }
                             n.checked = true;
                             _this.favorite.add('item', false, n.displayName, _this.layerRoot.serialize(false));
                             created.push(n.displayName);
@@ -451,10 +522,8 @@ var psdtool;
                 // build the recent list
                 var recents = document.getElementById('pfv-recents');
                 recents.innerHTML = '';
-                var pfvs = [], btn;
-                if ('psdtool_pfv' in localStorage) {
-                    pfvs = JSON.parse(localStorage['psdtool_pfv']);
-                }
+                var btn;
+                var pfvs = _this.favorite.getPFVListFromLocalStorage();
                 for (var i = pfvs.length - 1; i >= 0; --i) {
                     btn = document.createElement('button');
                     btn.type = 'button';
@@ -524,6 +593,30 @@ var psdtool;
                 r(elem, _this.bulkRenameData);
             });
             document.getElementById('bulk-rename').addEventListener('click', function (e) {
+                // auto numbering
+                var digits = 1;
+                {
+                    var elem = document.getElementById('rename-digits');
+                    if (elem instanceof HTMLSelectElement) {
+                        digits = parseInt(elem.value, 10);
+                    }
+                }
+                var n = 0;
+                {
+                    var elem = document.getElementById('rename-start-number');
+                    if (elem instanceof HTMLInputElement) {
+                        n = parseInt(elem.value, 10);
+                    }
+                }
+                var elems = document.getElementById('bulk-rename-tree').querySelectorAll('input');
+                for (var i = 0; i < elems.length; ++i) {
+                    var elem = elems[i];
+                    if (elem instanceof HTMLInputElement && elem.value === '') {
+                        elem.value = ('0000' + n.toString()).slice(-digits);
+                        elem.onblur(null);
+                        ++n;
+                    }
+                }
                 _this.favorite.bulkRename(_this.bulkRenameData);
             }, false);
             document.getElementById('export-favorites-pfv').addEventListener('click', function (e) {
@@ -542,6 +635,86 @@ var psdtool;
                     type: 'text/plain'
                 }), 'layer.txt');
             }, false);
+            var faviewToggleButtons = document.querySelectorAll('.psdtool-toggle-tree-faview');
+            for (var i = 0; i < faviewToggleButtons.length; ++i) {
+                faviewToggleButtons[i].addEventListener('click', function (e) { return _this.toogleTreeFaview(); }, false);
+            }
+            this.faviewSettingDialog = new FaviewSettingDialog(this.favorite);
+            this.faviewSettingDialog.onUpdate = function () { return _this.favorite.updateLocalStorage(); };
+        };
+        Main.prototype.toogleTreeFaview = function (forceActiveFaview) {
+            var pane = document.getElementById('layer-tree-pane');
+            if (forceActiveFaview === undefined) {
+                forceActiveFaview = !pane.classList.contains('faview-active');
+            }
+            if (forceActiveFaview) {
+                pane.classList.add('faview-active');
+                this.faviewOnRootChanged();
+            }
+            else {
+                pane.classList.remove('faview-active');
+            }
+        };
+        Main.prototype.startFaview = function () {
+            var _this = this;
+            this.resized();
+            if (!this.faview) {
+                var rootSel = void 0;
+                var root = void 0;
+                var elem = document.getElementById('faview-root-node');
+                if (elem instanceof HTMLSelectElement) {
+                    rootSel = elem;
+                }
+                else {
+                    throw new Error('element not found: #faview-root-node');
+                }
+                elem = document.getElementById('faview-tree');
+                if (elem instanceof HTMLUListElement) {
+                    root = elem;
+                }
+                else {
+                    throw new Error('element not found: #faview-tree');
+                }
+                this.faview = new Favorite.Faview(this.favorite, rootSel, root);
+                this.faview.onRootChanged = function () { return _this.faviewOnRootChanged(); };
+                this.faview.onChange = function (node) { return _this.faviewOnChange(node); };
+            }
+            document.getElementById('layer-tree-toolbar').classList.remove('hidden');
+            this.faview.start();
+            this.needRefreshFaview = false;
+            if (this.faview.roots === 0) {
+                this.endFaview();
+            }
+            else {
+                this.resized();
+            }
+        };
+        Main.prototype.refreshFaview = function () {
+            if (!this.needRefreshFaview) {
+                return;
+            }
+            this.faview.refresh();
+            this.needRefreshFaview = false;
+            if (this.faview.roots === 0) {
+                this.endFaview();
+            }
+        };
+        Main.prototype.faviewOnRootChanged = function () {
+            this.leaveReaderMode();
+            for (var _i = 0, _a = this.faview.getActive(); _i < _a.length; _i++) {
+                var n = _a[_i];
+                this.layerRoot.deserializePartial(undefined, n.data.value, this.favorite.getFirstFilter(n));
+            }
+            this.redraw();
+        };
+        Main.prototype.faviewOnChange = function (node) {
+            this.leaveReaderMode(node.data.value, this.favorite.getFirstFilter(node));
+        };
+        Main.prototype.endFaview = function () {
+            document.getElementById('layer-tree-toolbar').classList.add('hidden');
+            this.toogleTreeFaview(false);
+            this.resized();
+            this.faview.close();
         };
         Main.prototype.exportZIP = function (filterSolo) {
             var _this = this;
@@ -550,7 +723,7 @@ var psdtool;
             var r = function (children) {
                 for (var _i = 0, children_1 = children; _i < children_1.length; _i++) {
                     var item = children_1[_i];
-                    path.push(Main.cleanForFilename(item.text));
+                    path.push(Main.cleanForFilename(item.text.replace(/^\*/, '')));
                     switch (item.type) {
                         case 'root':
                             path.pop();
@@ -654,10 +827,16 @@ var psdtool;
             this.optionAutoTrim = Main.getInputElement('#option-auto-trim');
             this.optionSafeMode = Main.getInputElement('#option-safe-mode');
             // save and restore scroll position of side-body on each tab.
-            this.favoriteToolbar = document.getElementById('favorite-toolbar');
+            var toolbars = document.querySelectorAll('.psdtool-tab-toolbar');
             this.sideBody = document.getElementById('side-body');
             this.sideBody.addEventListener('scroll', function (e) {
-                _this.favoriteToolbar.style.top = _this.sideBody.scrollTop + 'px';
+                var pos = _this.sideBody.scrollTop + 'px';
+                for (var i = 0; i < toolbars.length; ++i) {
+                    var elem_1 = toolbars[i];
+                    if (elem_1 instanceof HTMLElement) {
+                        elem_1.style.top = pos;
+                    }
+                }
             }, false);
             this.sideBodyScrollPos = {};
             jQuery('a[data-toggle="tab"]').on('hide.bs.tab', function (e) {
@@ -676,6 +855,10 @@ var psdtool;
             });
             jQuery('a[data-toggle="tab"][href="#layer-tree-pane"]').on('show.bs.tab', function (e) {
                 _this.leaveReaderMode();
+                if (!_this.faview || _this.faview.closed) {
+                    _this.startFaview();
+                }
+                _this.refreshFaview();
             });
             this.initFavoriteUI();
             this.previewBackground = document.getElementById('preview-background');
@@ -696,21 +879,13 @@ var psdtool;
                 e.dataTransfer.setData('text/uri-list', s);
                 e.dataTransfer.setData('text/plain', s);
             }, false);
-            elem = document.getElementById('show-readme');
-            if (elem instanceof HTMLButtonElement) {
-                this.showReadme = elem;
-            }
-            else {
-                throw new Error('element not found: #show-readme');
-            }
-            this.showReadme.addEventListener('click', function (e) {
-                var w = window.open('', null);
-                w.document.body.innerHTML = '<title>Readme - PSDTool</title><pre style="font: 12pt/1.7 monospace;"></pre>';
-                w.document.querySelector('pre').textContent = _this.psdRoot.Readme;
-            }, false);
             jQuery('#main').on('splitpaneresize', function (e) { return _this.resized(); }).splitPane();
-            this.invertInput = Main.getInputElement('#invert-input');
-            this.invertInput.addEventListener('click', function (e) { return _this.redraw(); }, false);
+            elem = document.getElementById('flip');
+            if (elem instanceof HTMLSelectElement) {
+                this.flip = elem;
+            }
+            this.flip.addEventListener('change', function (e) { return _this.redraw(); }, false);
+            this.flip.addEventListener('keyup', function (e) { _this.flip.blur(); _this.flip.focus(); }, false);
             elem = document.getElementById('fixed-side');
             if (elem instanceof HTMLSelectElement) {
                 this.fixedSide = elem;
@@ -814,7 +989,29 @@ var psdtool;
                     scale = 1 / w;
                 }
             }
-            this.renderer.render(scale, autoTrim, this.invertInput.checked, callback);
+            var rf;
+            var flipType = parseInt(this.flip.value, 10);
+            switch (flipType) {
+                case 0 /* NoFlip */:
+                    rf = 0 /* NoFlip */;
+                    break;
+                case 1 /* FlipX */:
+                    rf = 1 /* FlipX */;
+                    break;
+                case 2 /* FlipY */:
+                    rf = 2 /* FlipY */;
+                    break;
+                case 3 /* FlipXY */:
+                    rf = 3 /* FlipXY */;
+                    break;
+                default:
+                    rf = 0 /* NoFlip */;
+                    flipType = 0 /* NoFlip */;
+            }
+            if (this.layerRoot.flip !== flipType) {
+                this.layerRoot.flip = flipType;
+            }
+            this.renderer.render(scale, autoTrim, rf, callback);
         };
         Main.prototype.initLayerTree = function () {
             var _this = this;
@@ -1077,7 +1274,7 @@ var psdtool;
     var originalStopCallback = Mousetrap.prototype.stopCallback;
     Mousetrap.prototype.stopCallback = function (e, element, combo) {
         if (!this.paused) {
-            if (element.classList.contains('psdtool-layer-visible')) {
+            if (element.classList.contains('psdtool-layer-visible') || element.classList.contains('psdtool-faview-select')) {
                 return false;
             }
         }

@@ -764,6 +764,7 @@ var Favorite;
             this.treeRoots = [];
             root.addEventListener('click', function (e) { return _this.click(e); }, false);
             root.addEventListener('change', function (e) { return _this.change(e); }, false);
+            root.addEventListener('input', function (e) { return _this.input(e); }, false);
             root.addEventListener('keyup', function (e) { return _this.keyup(e); }, false);
             rootSel.addEventListener('change', function (e) { return _this.change(e); }, false);
             rootSel.addEventListener('keyup', function (e) { return _this.keyup(e); }, false);
@@ -821,6 +822,10 @@ var Favorite;
                                 if (opt_1 instanceof HTMLOptionElement && opt_1.value === item[id].value) {
                                     elem.selectedIndex = j;
                                     elem.setAttribute('data-lastmod', item[id].lastMod.toString());
+                                    var range = elem.parentElement.querySelector('input[type=range]');
+                                    if (range instanceof HTMLInputElement) {
+                                        range.value = j.toString();
+                                    }
                                     break;
                                 }
                             }
@@ -846,6 +851,10 @@ var Favorite;
         };
         Faview.prototype.changed = function (select) {
             select.setAttribute('data-lastmod', Date.now().toString());
+            var range = select.parentElement.querySelector('input[type=range]');
+            if (range instanceof HTMLInputElement) {
+                range.value = select.selectedIndex.toString();
+            }
             if (this.onChange) {
                 this.onChange(this.favorite.get(select.value));
             }
@@ -866,6 +875,23 @@ var Favorite;
                     return;
                 }
                 this.changed(target);
+            }
+            else if (target instanceof HTMLInputElement && target.type === 'range') {
+                var sel = target.parentElement.querySelector('select');
+                if (sel instanceof HTMLSelectElement) {
+                    sel.selectedIndex = parseInt(target.value, 10);
+                    this.changed(sel);
+                }
+            }
+        };
+        Faview.prototype.input = function (e) {
+            var target = e.target;
+            if (target instanceof HTMLInputElement && target.type === 'range') {
+                var sel = target.parentElement.querySelector('select');
+                if (sel instanceof HTMLSelectElement) {
+                    sel.selectedIndex = parseInt(target.value, 10);
+                    this.changed(sel);
+                }
             }
         };
         Faview.prototype.click = function (e) {
@@ -909,9 +935,9 @@ var Favorite;
                     switch (cn.type) {
                         case 'item':
                             opt = document.createElement('option');
-                            opt.textContent = (++numItems).toString() + '. ' + cn.text;
+                            opt.textContent = cn.text;
                             opt.value = cn.id;
-                            if (numItems === 1) {
+                            if (++numItems === 1) {
                                 firstItemId = cn.id;
                             }
                             sel.appendChild(opt);
@@ -926,6 +952,10 @@ var Favorite;
             }
             // show filtered entry only
             if (numItems > 0 && this.favorite.getFirstFilter(this.favorite.get(firstItemId)) !== '') {
+                var range = document.createElement('input');
+                range.type = 'range';
+                range.max = (numItems - 1).toString();
+                range.value = '0';
                 var prev = document.createElement('button');
                 prev.className = 'btn btn-default psdtool-faview-prev';
                 prev.innerHTML = '&lt;';
@@ -939,10 +969,12 @@ var Favorite;
                 if (numItems === 1) {
                     prev.disabled = true;
                     sel.disabled = true;
+                    range.disabled = true;
                     next.disabled = true;
                 }
                 fs.appendChild(prev);
                 fs.appendChild(sel);
+                fs.appendChild(range);
                 fs.appendChild(next);
                 li.appendChild(fs);
             }

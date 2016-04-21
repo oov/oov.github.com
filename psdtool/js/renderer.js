@@ -35,6 +35,29 @@ var Renderer;
             enumerable: true,
             configurable: true
         });
+        Object.defineProperty(Node.prototype, "stateHash", {
+            get: function () { return Node.calcHash(this.state).toString(16); },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(Node.prototype, "nextStateHash", {
+            get: function () { return Node.calcHash(this.nextState).toString(16); },
+            enumerable: true,
+            configurable: true
+        });
+        // http://stackoverflow.com/a/7616484
+        Node.calcHash = function (s) {
+            if (s.length === 0) {
+                return 0;
+            }
+            var hash = 0, chr;
+            for (var i = 0; i < s.length; ++i) {
+                chr = s.charCodeAt(i);
+                hash = ((hash << 5) - hash) + chr;
+                hash |= 0; // Convert to 32bit integer
+            }
+            return hash;
+        };
         return Node;
     }());
     Renderer_1.Node = Node;
@@ -129,7 +152,7 @@ var Renderer;
                 var cn = _a[_i];
                 if (!cn.layer.Clipping) {
                     if (this.calculateNextState(cn, cn.layer.Opacity / 255, cn.layer.BlendMode)) {
-                        this.root.nextState += cn.nextState + '+';
+                        this.root.nextState += cn.nextStateHash + '+';
                     }
                 }
             }
@@ -192,13 +215,13 @@ var Renderer;
             n.nextState = '';
             if (n.layer.Children.length) {
                 if (blendMode === 'pass-through') {
-                    n.nextState += n.parent.nextState + '+';
+                    n.nextState += n.parent.nextStateHash + '+';
                 }
                 for (var i = 0, child = void 0; i < n.layer.Children.length; ++i) {
                     child = n.layer.Children[i];
                     if (!child.Clipping) {
                         if (this.calculateNextState(n.children[i], child.Opacity / 255, child.BlendMode)) {
-                            n.nextState += n.children[i].nextState + '+';
+                            n.nextState += n.children[i].nextStateHash + '+';
                         }
                     }
                 }
@@ -217,7 +240,7 @@ var Renderer;
                 for (var i = 0, cn = void 0; i < n.clip.length; ++i) {
                     cn = n.clip[i];
                     if (this.calculateNextState(n.clip[i], cn.layer.Opacity / 255, cn.layer.BlendMode)) {
-                        n.nextState += n.clip[i].nextState + '+';
+                        n.nextState += n.clip[i].nextStateHash + '+';
                     }
                 }
                 return true;
@@ -227,7 +250,7 @@ var Renderer;
             for (var _i = 0, _a = n.clip; _i < _a.length; _i++) {
                 var cn = _a[_i];
                 if (this.calculateNextState(cn, 1, 'source-over')) {
-                    n.nextState += cn.nextState + '+';
+                    n.nextState += cn.nextStateHash + '+';
                 }
             }
             return true;

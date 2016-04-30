@@ -776,6 +776,52 @@ var Favorite;
             enumerable: true,
             configurable: true
         });
+        Object.defineProperty(Faview.prototype, "selectedRootIndex", {
+            get: function () {
+                return this.rootSel.selectedIndex;
+            },
+            set: function (n) {
+                this.rootSel.selectedIndex = n;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(Faview.prototype, "items", {
+            get: function () {
+                var r = [];
+                for (var i = 0; i < this.rootSel.length; ++i) {
+                    var fsels = [];
+                    var selects = this.treeRoots[i].getElementsByTagName('select');
+                    for (var j = 0; j < selects.length; ++j) {
+                        var sel = selects[j];
+                        if (sel instanceof HTMLSelectElement) {
+                            var fsel = {
+                                caption: sel.getAttribute('data-caption'),
+                                items: [],
+                                selectedIndex: sel.selectedIndex
+                            };
+                            for (var k = 0; k < sel.length; ++k) {
+                                var opt_1 = sel.options[k];
+                                fsel.items.push({
+                                    name: opt_1.textContent,
+                                    value: opt_1.value
+                                });
+                            }
+                            fsels.push(fsel);
+                        }
+                    }
+                    var opt = this.rootSel.options[i];
+                    r.push({
+                        name: opt.textContent,
+                        value: opt.value,
+                        selects: fsels
+                    });
+                }
+                return r;
+            },
+            enumerable: true,
+            configurable: true
+        });
         Object.defineProperty(Faview.prototype, "closed", {
             get: function () {
                 return this.closed_;
@@ -818,8 +864,8 @@ var Favorite;
                                 continue;
                             }
                             for (var j = 0; j < elem.length; ++j) {
-                                var opt_1 = elem.options[j];
-                                if (opt_1 instanceof HTMLOptionElement && opt_1.value === item[id].value) {
+                                var opt_2 = elem.options[j];
+                                if (opt_2 instanceof HTMLOptionElement && opt_2.value === item[id].value) {
                                     elem.selectedIndex = j;
                                     elem.setAttribute('data-lastmod', item[id].lastMod.toString());
                                     var range = elem.parentElement.querySelector('input[type=range]');
@@ -916,15 +962,17 @@ var Favorite;
             }
         };
         Faview.prototype.addNode = function (n, ul) {
+            var caption = n.text.replace(/^\*/, '');
             var li = document.createElement('li');
             var span = document.createElement('span');
             span.className = 'glyphicon glyphicon-asterisk';
             li.appendChild(span);
-            li.appendChild(document.createTextNode(n.text.replace(/^\*?/, ' ')));
+            li.appendChild(document.createTextNode(' ' + caption));
             ul.appendChild(li);
             var sel = document.createElement('select');
             sel.className = 'form-control psdtool-faview-select';
             sel.setAttribute('data-id', n.id);
+            sel.setAttribute('data-caption', caption);
             var cul = document.createElement('ul');
             var opt;
             var firstItemId;

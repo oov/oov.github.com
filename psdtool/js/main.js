@@ -402,16 +402,16 @@ var psdtool;
                 _this.startFaview();
                 switch (_this.favorite.faviewMode) {
                     case 0 /* ShowLayerTree */:
-                        _this.toogleTreeFaview(false);
+                        _this.toggleTreeFaview(false);
                         break;
                     case 1 /* ShowFaview */:
                         if (!_this.faview.closed) {
-                            _this.toogleTreeFaview(true);
+                            _this.toggleTreeFaview(true);
                         }
                         break;
                     case 2 /* ShowFaviewAndReadme */:
                         if (!_this.faview.closed) {
-                            _this.toogleTreeFaview(true);
+                            _this.toggleTreeFaview(true);
                             if (_this.psdRoot.Readme !== '') {
                                 jQuery('#readme-dialog').modal('show');
                             }
@@ -462,7 +462,8 @@ var psdtool;
             });
             Mousetrap.bind('mod+b', function (e) {
                 e.preventDefault();
-                var text = prompt(document.querySelector('button[data-psdtool-tree-add-item]').getAttribute('data-caption'), 'New Item');
+                var text = _this.lastCheckedNode ? _this.lastCheckedNode.displayName : 'New Item';
+                text = prompt(document.querySelector('button[data-psdtool-tree-add-item]').getAttribute('data-caption'), text);
                 if (text === null) {
                     return;
                 }
@@ -630,6 +631,14 @@ var psdtool;
             document.getElementById('export-favorites-zip-filter-solo').addEventListener('click', function (e) {
                 _this.exportZIP(true);
             }, false);
+            var faviewExports = document.querySelectorAll('[data-export-faview]');
+            for (var i = 0; i < faviewExports.length; ++i) {
+                (function (elem) {
+                    elem.addEventListener('click', function (e) {
+                        _this.exportFaview(elem.getAttribute('data-export-faview') === 'standard', elem.getAttribute('data-structure') === 'flat');
+                    });
+                })(faviewExports[i]);
+            }
             document.getElementById('export-layer-structure').addEventListener('click', function (e) {
                 saveAs(new Blob([_this.layerRoot.text], {
                     type: 'text/plain'
@@ -637,12 +646,12 @@ var psdtool;
             }, false);
             var faviewToggleButtons = document.querySelectorAll('.psdtool-toggle-tree-faview');
             for (var i = 0; i < faviewToggleButtons.length; ++i) {
-                faviewToggleButtons[i].addEventListener('click', function (e) { return _this.toogleTreeFaview(); }, false);
+                faviewToggleButtons[i].addEventListener('click', function (e) { return _this.toggleTreeFaview(); }, false);
             }
             this.faviewSettingDialog = new FaviewSettingDialog(this.favorite);
             this.faviewSettingDialog.onUpdate = function () { return _this.favorite.updateLocalStorage(); };
         };
-        Main.prototype.toogleTreeFaview = function (forceActiveFaview) {
+        Main.prototype.toggleTreeFaview = function (forceActiveFaview) {
             var pane = document.getElementById('layer-tree-pane');
             if (forceActiveFaview === undefined) {
                 forceActiveFaview = !pane.classList.contains('faview-active');
@@ -690,6 +699,9 @@ var psdtool;
             }
         };
         Main.prototype.refreshFaview = function () {
+            if (!this.faview || this.faview.closed) {
+                this.startFaview();
+            }
             if (!this.needRefreshFaview) {
                 return;
             }
@@ -712,7 +724,7 @@ var psdtool;
         };
         Main.prototype.endFaview = function () {
             document.getElementById('layer-tree-toolbar').classList.add('hidden');
-            this.toogleTreeFaview(false);
+            this.toggleTreeFaview(false);
             this.resized();
             this.faview.close();
         };
@@ -822,6 +834,118 @@ var psdtool;
                 process();
             }, function (e) { return errorHandler('cannot create a zip archive', e); });
         };
+        Main.prototype.exportFaview = function (includeItemCaption, flatten) {
+            var _this = this;
+            this.refreshFaview();
+            var items = this.faview.items;
+            var total = 0;
+            for (var _i = 0, items_1 = items; _i < items_1.length; _i++) {
+                var item = items_1[_i];
+                if (!item.selects.length) {
+                    continue;
+                }
+                var n = 1;
+                for (var _a = 0, _b = item.selects; _a < _b.length; _a++) {
+                    var select = _b[_a];
+                    n *= select.items.length;
+                }
+                total += n;
+            }
+            if (!total) {
+                alert('You need at least one simple-view item to export.');
+                return;
+            }
+            var backup = this.layerRoot.serialize(true);
+            var z = new Zipper.Zipper();
+            var prog = new ProgressDialog('Exporting...', '');
+            var aborted = false;
+            var errorHandler = function (readableMessage, err) {
+                z.dispose(function (err) { return undefined; });
+                console.error(err);
+                if (!aborted) {
+                    alert(readableMessage + ': ' + err);
+                }
+                prog.close();
+            };
+            // it is needed to avoid alert storm when reload during exporting.
+            window.addEventListener('unload', function () { aborted = true; }, false);
+            var added = 0;
+            var addedHandler = function (name) {
+                if (++added < total) {
+                    prog.update(added / total, added === 1 ? 'drawing...' : '(' + added + '/' + total + ') ' + name);
+                    return;
+                }
+                _this.layerRoot.deserialize(backup);
+                prog.update(1, 'building a zip...');
+                z.generate(function (blob) {
+                    prog.close();
+                    saveAs(blob, 'simple-view.zip');
+                    z.dispose(function (err) { return undefined; });
+                }, function (e) { return errorHandler('cannot create a zip archive', e); });
+            };
+            var sels;
+            var path = [];
+            var nextRoot;
+            var nextItem = function (depth, index, complete) {
+                var sel = sels[depth];
+                var item = sel.items[index];
+                path.push(Main.cleanForFilename((includeItemCaption ? sel.caption + '-' : '') + item.name));
+                var fav = _this.favorite.get(item.value);
+                _this.layerRoot.deserializePartial(undefined, fav.data.value, _this.favorite.getFirstFilter(fav));
+                var next = function () {
+                    path.pop();
+                    if (index < sel.items.length - 1) {
+                        nextItem(depth, index + 1, complete);
+                    }
+                    else {
+                        complete();
+                    }
+                };
+                if (depth < sels.length - 1) {
+                    if (sels[depth + 1].items.length) {
+                        nextItem(depth + 1, 0, next);
+                    }
+                    else {
+                        next();
+                    }
+                }
+                else {
+                    _this.render(function (progress, canvas) {
+                        if (progress !== 1) {
+                            return;
+                        }
+                        var name = path.join(flatten ? '_' : '\\') + '.png';
+                        z.add(name, new Blob([Main.dataSchemeURIToArrayBuffer(canvas.toDataURL())], { type: 'image/png' }), function () {
+                            addedHandler(name);
+                            next();
+                        }, function (e) { return errorHandler('cannot write png to a zip archive', e); });
+                    });
+                }
+            };
+            nextRoot = function (index, complete) {
+                var item = items[index];
+                path.push(Main.cleanForFilename(item.name));
+                sels = item.selects;
+                var next = function () {
+                    path.pop();
+                    if (++index >= items.length) {
+                        complete();
+                    }
+                    else {
+                        nextRoot(index, complete);
+                    }
+                };
+                if (sels.length && sels[0].items.length) {
+                    nextItem(0, 0, next);
+                }
+                else {
+                    next();
+                }
+            };
+            z.init(function () {
+                nextRoot(0, function () { return undefined; });
+            }, function (e) { return errorHandler('cannot create a zip archive', e); });
+        };
         Main.prototype.initUI = function () {
             var _this = this;
             this.optionAutoTrim = Main.getInputElement('#option-auto-trim');
@@ -855,9 +979,6 @@ var psdtool;
             });
             jQuery('a[data-toggle="tab"][href="#layer-tree-pane"]').on('show.bs.tab', function (e) {
                 _this.leaveReaderMode();
-                if (!_this.faview || _this.faview.closed) {
-                    _this.startFaview();
-                }
                 _this.refreshFaview();
             });
             this.initFavoriteUI();
@@ -880,12 +1001,16 @@ var psdtool;
                 e.dataTransfer.setData('text/plain', s);
             }, false);
             jQuery('#main').on('splitpaneresize', function (e) { return _this.resized(); }).splitPane();
-            elem = document.getElementById('flip');
-            if (elem instanceof HTMLSelectElement) {
-                this.flip = elem;
+            elem = document.getElementById('flip-x');
+            if (elem instanceof HTMLInputElement) {
+                this.flipX = elem;
             }
-            this.flip.addEventListener('change', function (e) { return _this.redraw(); }, false);
-            this.flip.addEventListener('keyup', function (e) { _this.flip.blur(); _this.flip.focus(); }, false);
+            jQuery(this.flipX).on('change', function (e) { return _this.redraw(); });
+            elem = document.getElementById('flip-y');
+            if (elem instanceof HTMLInputElement) {
+                this.flipY = elem;
+            }
+            jQuery(this.flipY).on('change', function (e) { return _this.redraw(); });
             elem = document.getElementById('fixed-side');
             if (elem instanceof HTMLSelectElement) {
                 this.fixedSide = elem;
@@ -989,27 +1114,30 @@ var psdtool;
                     scale = 1 / w;
                 }
             }
+            var ltf;
             var rf;
-            var flipType = parseInt(this.flip.value, 10);
-            switch (flipType) {
-                case 0 /* NoFlip */:
-                    rf = 0 /* NoFlip */;
-                    break;
-                case 1 /* FlipX */:
-                    rf = 1 /* FlipX */;
-                    break;
-                case 2 /* FlipY */:
-                    rf = 2 /* FlipY */;
-                    break;
-                case 3 /* FlipXY */:
+            if (this.flipX.checked) {
+                if (this.flipY.checked) {
+                    ltf = 3 /* FlipXY */;
                     rf = 3 /* FlipXY */;
-                    break;
-                default:
-                    rf = 0 /* NoFlip */;
-                    flipType = 0 /* NoFlip */;
+                }
+                else {
+                    ltf = 1 /* FlipX */;
+                    rf = 1 /* FlipX */;
+                }
             }
-            if (this.layerRoot.flip !== flipType) {
-                this.layerRoot.flip = flipType;
+            else {
+                if (this.flipY.checked) {
+                    ltf = 2 /* FlipY */;
+                    rf = 2 /* FlipY */;
+                }
+                else {
+                    ltf = 0 /* NoFlip */;
+                    rf = 0 /* NoFlip */;
+                }
+            }
+            if (this.layerRoot.flip !== ltf) {
+                this.layerRoot.flip = ltf;
             }
             this.renderer.render(scale, autoTrim, rf, callback);
         };
@@ -1029,6 +1157,9 @@ var psdtool;
                 var target = e.target;
                 if (target instanceof HTMLInputElement && target.classList.contains('psdtool-layer-visible')) {
                     var n = _this.layerRoot.nodes[parseInt(target.getAttribute('data-seq'), 10)];
+                    if (target.checked) {
+                        _this.lastCheckedNode = n;
+                    }
                     for (var p = n.parent; !p.isRoot; p = p.parent) {
                         p.checked = true;
                     }

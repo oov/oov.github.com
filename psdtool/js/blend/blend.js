@@ -62,9 +62,18 @@ var blend = (function() {
    }
 
    function copyAlpha(d, s, w, h, alpha) {
-      var sa, da;
       for (var i = 0, len = w * h << 2; i < len; i += 4) {
          d[i + 3] = s[i + 3] * alpha;
+      }
+   }
+
+   function copyOpaque(d, s, w, h, alpha) {
+      var a = 255 * alpha;
+      for (var i = 0, len = w * h << 2; i < len; i += 4) {
+         d[i + 0] = s[i + 0];
+         d[i + 1] = s[i + 1];
+         d[i + 2] = s[i + 2];
+         d[i + 3] = a;
       }
    }
 
@@ -1096,6 +1105,7 @@ var blend = (function() {
 
    var blendModes = {
       'copy-alpha': copyAlpha,
+      'copy-opaque': copyOpaque,
 
       // 'pass-through': blendPassThrough,
       'source-over': blendNormal,

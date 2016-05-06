@@ -304,16 +304,12 @@ var Renderer;
             var cbb = n.clippingBuffer;
             var cbbctx = cbb.getContext('2d');
             if (n.layer.BlendClippedElements) {
-                this.clear(cbbctx);
-                this.draw(cbbctx, bb, 0, 0, 1, 'source-over');
-                var changed = false;
+                this.draw(cbbctx, bb, 0, 0, 1, 'copy-opaque');
                 for (var _b = 0, _c = n.clip; _b < _c.length; _b++) {
                     var cn = _c[_b];
-                    changed = this.drawLayer(cbbctx, cn, -n.layer.X, -n.layer.Y, cn.layer.Opacity / 255, cn.layer.BlendMode) || changed;
+                    this.drawLayer(cbbctx, cn, -n.layer.X, -n.layer.Y, cn.layer.Opacity / 255, cn.layer.BlendMode);
                 }
-                if (changed) {
-                    this.draw(cbbctx, bb, 0, 0, 1, 'copy-alpha');
-                }
+                this.draw(cbbctx, bb, 0, 0, 1, 'copy-alpha');
                 // swap buffer for next time
                 n.clippingBuffer = bb;
                 n.buffer = cbb;

@@ -75,9 +75,18 @@ var Renderer;
         }
         Renderer.prototype.draw = function (ctx, src, x, y, opacity, blendMode) {
             switch (blendMode) {
+                case 'clear':
+                case 'copy':
+                case 'destination':
                 case 'source-over':
+                case 'destination-over':
+                case 'source-in':
                 case 'destination-in':
+                case 'source-out':
                 case 'destination-out':
+                case 'source-atop':
+                case 'destination-atop':
+                case 'xor':
                     ctx.globalAlpha = opacity;
                     ctx.globalCompositeOperation = blendMode;
                     ctx.drawImage(src, x, y);
@@ -303,7 +312,7 @@ var Renderer;
                     changed = this.drawLayer(cbbctx, cn, -n.layer.X, -n.layer.Y, cn.layer.Opacity / 255, cn.layer.BlendMode) || changed;
                 }
                 if (changed) {
-                    this.draw(cbbctx, bb, 0, 0, 1, 'destination-in');
+                    this.draw(cbbctx, bb, 0, 0, 1, 'copy-alpha');
                 }
                 // swap buffer for next time
                 n.clippingBuffer = bb;

@@ -51,6 +51,7 @@ var DownScaler = (function () {
     DownScaler.prototype.beautifulWorker = function (callback) {
         var _this = this;
         var w = new Worker(DownScaler.createWorkerURL());
+        DownScaler.activeWorker = w;
         w.onmessage = function (e) {
             _this.adjustSize();
             var ctx = _this.dest.getContext('2d');

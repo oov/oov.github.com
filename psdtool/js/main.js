@@ -320,7 +320,7 @@ var psdtool;
         Main.prototype.parse = function (progress, obj) {
             var _this = this;
             var deferred = m.deferred();
-            PSD.parse(obj.buffer, progress, function (psd) {
+            PSD.parseWorker(obj.buffer, progress, function (psd) {
                 try {
                     _this.psdRoot = psd;
                     _this.loadLayerTree(psd);

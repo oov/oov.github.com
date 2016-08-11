@@ -187,6 +187,9 @@ var Renderer;
                 canvas.width = 0 | w * scale;
                 canvas.height = 0 | h * scale;
                 var ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    throw new Error('cannot get CanvasRenderingContext2D');
+                }
                 _this.clear(ctx);
                 ctx.save();
                 switch (flip) {
@@ -282,6 +285,9 @@ var Renderer;
                 return true;
             }
             var bbctx = bb.getContext('2d');
+            if (!bbctx) {
+                throw new Error('cannot get CanvasRenderingContext2D for BackBuffer');
+            }
             this.clear(bbctx);
             if (n.children.length) {
                 if (blendMode === 'pass-through') {
@@ -323,6 +329,9 @@ var Renderer;
             }
             var cbb = n.clippingBuffer;
             var cbbctx = cbb.getContext('2d');
+            if (!cbbctx) {
+                throw new Error('cannot get CanvasRenderingContext2D for ClipBackBuffer');
+            }
             if (n.layer.BlendClippedElements) {
                 this.draw(cbbctx, bb, 0, 0, 1, 'copy-opaque');
                 for (var _d = 0, _e = n.clip; _d < _e.length; _d++) {

@@ -287,6 +287,9 @@ var LayerTree;
                         w = thumb.height / l.Height * w;
                     }
                     var ctx = thumb.getContext('2d');
+                    if (!ctx) {
+                        throw new Error('cannot get CanvasRenderingContext2D for make thumbnail');
+                    }
                     ctx.drawImage(l.Canvas, (thumb.width - w) / 2, (thumb.height - h) / 2, w, h);
                 }
                 name.appendChild(thumb);
@@ -362,6 +365,7 @@ var LayerTree;
                         return { tokens: token, name: p.join(':') };
                 }
             }
+            throw new Error('cannot parse token from name: ' + name);
         };
         LayerTree.prototype.registerFlippingGroup = function () {
             var _this = this;
@@ -450,7 +454,8 @@ var LayerTree;
                 }
                 return r.join('\n');
             }
-            var i, items = [], pathMap = {};
+            var i;
+            var items = [], pathMap = {};
             for (i = 0; i < nodes.length; ++i) {
                 items.push({
                     node: nodes[i],
@@ -638,6 +643,9 @@ var LayerTree;
         LayerTree.prototype.normalize = function () {
             // TODO: re-implement
             var ul = document.getElementById('layer-tree');
+            if (!ul) {
+                throw new Error('#layer-tree not found');
+            }
             var elems = ul.querySelectorAll('.psdtool-layer-force-visible');
             for (var i = 0; i < elems.length; ++i) {
                 elems[i].checked = true;
@@ -645,13 +653,17 @@ var LayerTree;
             var set = {};
             var radios = ul.querySelectorAll('.psdtool-layer-radio');
             for (var i = 0; i < radios.length; ++i) {
-                if (radios[i].name in set) {
+                var radio = radios[i];
+                if (!(radio instanceof HTMLInputElement)) {
+                    throw new Error('found .psdtool-layer-radio that are not HTMLInputElement');
+                }
+                if (radio.name in set) {
                     continue;
                 }
-                set[radios[i].name] = true;
-                var rinShibuyas = ul.querySelectorAll('.psdtool-layer-radio[name="' + radios[i].name + '"]:checked');
+                set[radio.name] = true;
+                var rinShibuyas = ul.querySelectorAll('.psdtool-layer-radio[name="' + radio.name + '"]:checked');
                 if (!rinShibuyas.length) {
-                    radios[i].checked = true;
+                    radio.checked = true;
                     continue;
                 }
             }
@@ -735,7 +747,8 @@ var LayerTree;
             if (!nodes.length) {
                 return '';
             }
-            var i, path = [], pathMap = {};
+            var i;
+            var path = [], pathMap = {};
             for (i = 0; i < nodes.length; ++i) {
                 path.push({
                     node: nodes[i],

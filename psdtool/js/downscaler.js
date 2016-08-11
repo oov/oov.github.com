@@ -24,6 +24,9 @@ var DownScaler = (function () {
     DownScaler.prototype.fast = function () {
         this.adjustSize();
         var ctx = this.dest.getContext('2d');
+        if (!ctx) {
+            throw new Error('cannot get CanvasRenderingContext2D from dest');
+        }
         ctx.drawImage(this.src, 0, 0, this.src.width, this.src.height, 0, 0, Math.round(this.src.width * this.scale), Math.round(this.src.height * this.scale));
         return this.dest;
     };
@@ -38,11 +41,18 @@ var DownScaler = (function () {
         }
     };
     DownScaler.prototype.beautiful = function () {
-        var srcImageData = this.src.getContext('2d').getImageData(0, 0, this.src.width, this.src.height);
+        var srcCtx = this.src.getContext('2d');
+        if (!srcCtx) {
+            throw new Error('cannot get CanvasRenderingContext2D from src');
+        }
+        var srcImageData = srcCtx.getImageData(0, 0, this.src.width, this.src.height);
         var tmp = new Float32Array(this.destWidth * this.destHeight << 2);
         DownScaler.calculate(tmp, srcImageData.data, this.scale, this.src.width, this.src.height);
         this.adjustSize();
         var ctx = this.dest.getContext('2d');
+        if (!ctx) {
+            throw new Error('cannot get CanvasRenderingContext2D from dest');
+        }
         var imgData = ctx.createImageData(this.destWidth, this.destHeight);
         DownScaler.float32ToUint8ClampedArray(imgData.data, tmp, this.destWidth, this.destHeight, imgData.width);
         ctx.putImageData(imgData, 0, 0);
@@ -55,12 +65,19 @@ var DownScaler = (function () {
         w.onmessage = function (e) {
             _this.adjustSize();
             var ctx = _this.dest.getContext('2d');
+            if (!ctx) {
+                throw new Error('cannot get CanvasRenderingContext2D from dest');
+            }
             var imgData = ctx.createImageData(_this.destWidth, _this.destHeight);
             DownScaler.copyBuffer(imgData.data, new Uint8Array(e.data.buffer), _this.destWidth, _this.destHeight, imgData.width);
             ctx.putImageData(imgData, 0, 0);
             callback(_this.dest);
         };
-        var srcImageData = this.src.getContext('2d').getImageData(0, 0, this.src.width, this.src.height);
+        var srcCtx = this.src.getContext('2d');
+        if (!srcCtx) {
+            throw new Error('cannot get CanvasRenderingContext2D from src');
+        }
+        var srcImageData = srcCtx.getImageData(0, 0, this.src.width, this.src.height);
         w.postMessage({
             src: srcImageData.data.buffer,
             srcWidth: this.src.width,

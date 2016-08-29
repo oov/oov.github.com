@@ -86,27 +86,28 @@ var Zipper;
             };
         };
         Zipper.prototype.add = function (name, blob, complete, error) {
+            this.addCore(name, blob, false, complete, error);
+        };
+        Zipper.prototype.addCompress = function (name, blob, complete, error) {
+            this.addCore(name, blob, true, complete, error);
+        };
+        Zipper.prototype.addCore = function (name, blob, compress, complete, error) {
+            var _this = this;
             if (!this.db) {
                 return;
             }
-            var reqs = 2;
-            this.db.onerror = error;
-            var tx = this.db.transaction(fileStoreName, 'readwrite');
-            tx.onerror = error;
-            var os = tx.objectStore(fileStoreName);
-            os.put({ lastMod: new Date() }, 'meta_' + this.id);
-            var req = os.put(blob, 'body_' + this.id + '_' + this.fileInfos.length);
-            req.onsuccess = function (e) {
-                if (!--reqs) {
-                    complete();
-                }
-            };
-            req.onerror = error;
-            this.fileInfos.push(new FileInfo(name, blob, function () {
-                if (!--reqs) {
-                    complete();
-                }
-            }, error));
+            var index = this.fileInfos.length;
+            var fi = new FileInfo(name, blob, compress, function (compressed) {
+                _this.db.onerror = error;
+                var tx = _this.db.transaction(fileStoreName, 'readwrite');
+                tx.onerror = error;
+                var os = tx.objectStore(fileStoreName);
+                os.put({ lastMod: new Date() }, 'meta_' + _this.id);
+                var req = os.put(new Blob([compressed], { type: 'application/octet-binary' }), 'body_' + _this.id + '_' + index);
+                req.onsuccess = function (e) { return complete(); };
+                req.onerror = error;
+            }, error);
+            this.fileInfos.push(fi);
         };
         Zipper.prototype.generate = function (complete, error) {
             var _this = this;
@@ -121,7 +122,7 @@ var Zipper;
             this.receiveFiles(function (blobs) {
                 var size = Zip.endOfCentralDirectorySize;
                 _this.fileInfos.forEach(function (fi) {
-                    size += fi.localFileHeaderSize + fi.fileSize + fi.centralDirectoryRecordSize;
+                    size += fi.localFileHeaderSize + fi.compressedFileSize + fi.centralDirectoryRecordSize;
                 });
                 if (size > 0xffffffff || _this.fileInfos.length > 0xffff) {
                     complete(_this.makeZIP64(blobs));
@@ -161,7 +162,7 @@ var Zipper;
             var pos = 0, cdrSize = 0;
             this.fileInfos.forEach(function (fi) {
                 zip.push(fi.toCentralDirectoryRecord(pos));
-                pos += fi.fileSize + fi.localFileHeaderSize;
+                pos += fi.compressedFileSize + fi.localFileHeaderSize;
                 cdrSize += fi.centralDirectoryRecordSize;
             });
             zip.push(Zip.buildEndOfCentralDirectory(this.fileInfos.length, cdrSize, pos));
@@ -172,13 +173,13 @@ var Zipper;
             var pos = 0;
             this.fileInfos.forEach(function (fi, i) {
                 zip.push(fi.toLocalFileHeader64(pos), fileBodies[i]);
-                pos += fi.fileSize + fi.localFileHeaderSize64;
+                pos += fi.compressedFileSize + fi.localFileHeaderSize64;
             });
             pos = 0;
             var cdrSize = 0;
             this.fileInfos.forEach(function (fi) {
                 zip.push(fi.toCentralDirectoryRecord64(pos));
-                pos += fi.fileSize + fi.localFileHeaderSize64;
+                pos += fi.compressedFileSize + fi.localFileHeaderSize64;
                 cdrSize += fi.centralDirectoryRecordSize64;
             });
             zip.push(Zip64.buildEndOfCentralDirectory(this.fileInfos.length, cdrSize, pos));
@@ -188,18 +189,38 @@ var Zipper;
     }());
     Zipper_1.Zipper = Zipper;
     var FileInfo = (function () {
-        function FileInfo(name, data, complete, error) {
+        function FileInfo(name, data, compress, complete, error) {
             var _this = this;
             this.date = new Date();
-            this.size = data.size;
             var reqs = 2;
+            this.size = data.size;
+            this.compressedSize = data.size;
+            if (compress) {
+                this.compressionMethod = 8; // deflate
+                ++reqs;
+            }
+            else {
+                this.compressionMethod = 0; // stored
+            }
+            var ab;
             var fr = new FileReader();
             fr.onload = function (e) {
                 var result = fr.result;
                 if (result instanceof ArrayBuffer) {
+                    ab = result;
                     _this.crc = CRC32.crc32(result);
                     if (!--reqs) {
-                        complete();
+                        complete(ab);
+                        return;
+                    }
+                    if (compress) {
+                        Zip.deflate(result, function (compressed) {
+                            ab = compressed;
+                            _this.compressedSize = compressed.byteLength;
+                            if (!--reqs) {
+                                complete(ab);
+                            }
+                        });
                     }
                 }
             };
@@ -211,7 +232,7 @@ var Zipper;
                 if (result instanceof ArrayBuffer) {
                     _this.name = result;
                     if (!--reqs) {
-                        complete();
+                        complete(ab);
                     }
                 }
             };
@@ -221,6 +242,13 @@ var Zipper;
         Object.defineProperty(FileInfo.prototype, "fileSize", {
             get: function () {
                 return this.size;
+            },
+            enumerable: true,
+            configurable: true
+        });
+        Object.defineProperty(FileInfo.prototype, "compressedFileSize", {
+            get: function () {
+                return this.compressedSize;
             },
             enumerable: true,
             configurable: true
@@ -240,10 +268,10 @@ var Zipper;
             configurable: true
         });
         FileInfo.prototype.toLocalFileHeader = function () {
-            return Zip.buildLocalFileHeader(this.name, this.crc, this.date, this.size);
+            return Zip.buildLocalFileHeader(this.name, this.crc, this.date, this.compressionMethod, this.size, this.compressedSize);
         };
         FileInfo.prototype.toLocalFileHeader64 = function (lfhOffset) {
-            return Zip64.buildLocalFileHeader(this.name, this.crc, this.date, this.size, lfhOffset);
+            return Zip64.buildLocalFileHeader(this.name, this.crc, this.date, this.compressionMethod, this.size, this.compressedSize, lfhOffset);
         };
         Object.defineProperty(FileInfo.prototype, "centralDirectoryRecordSize", {
             get: function () {
@@ -260,10 +288,10 @@ var Zipper;
             configurable: true
         });
         FileInfo.prototype.toCentralDirectoryRecord = function (lfhOffset) {
-            return Zip.buildCentralDirectoryRecord(this.name, this.crc, this.date, this.size, lfhOffset);
+            return Zip.buildCentralDirectoryRecord(this.name, this.crc, this.date, this.compressionMethod, this.size, this.compressedSize, lfhOffset);
         };
         FileInfo.prototype.toCentralDirectoryRecord64 = function (lfhOffset) {
-            return Zip64.buildCentralDirectoryRecord(this.name, this.crc, this.date, this.size, lfhOffset);
+            return Zip64.buildCentralDirectoryRecord(this.name, this.crc, this.date, this.compressionMethod, this.size, this.compressedSize, lfhOffset);
         };
         return FileInfo;
     }());
@@ -274,7 +302,7 @@ var Zipper;
         Zip.calcLocalFileHeaderSize = function (name) {
             return 30 + name.byteLength + 9 + name.byteLength;
         };
-        Zip.buildLocalFileHeader = function (name, crc, lastMod, fileSize) {
+        Zip.buildLocalFileHeader = function (name, crc, lastMod, compressionMethod, fileSize, compressedSize) {
             var d = Zip.formatDate(lastMod);
             var lfh = new ArrayBuffer(30), extraField = new ArrayBuffer(9);
             var v = new DataView(lfh);
@@ -287,7 +315,7 @@ var Zipper;
             v.setUint16(6, 0x0800, true);
             // Compression method
             // 0 = stored (no compression)
-            v.setUint16(8, 0x0000, true);
+            v.setUint16(8, compressionMethod, true);
             // Last mod file time
             v.setUint16(10, d & 0xffff, true);
             // Last mod file date
@@ -295,7 +323,7 @@ var Zipper;
             // CRC-32
             v.setUint32(14, crc, true);
             // Compressed size
-            v.setUint32(18, fileSize, true);
+            v.setUint32(18, compressedSize, true);
             // Uncompressed size
             v.setUint32(22, fileSize, true);
             // Filename length
@@ -325,7 +353,7 @@ var Zipper;
         Zip.calcCentralDirectoryRecordSize = function (name) {
             return 46 + name.byteLength + 9 + name.byteLength;
         };
-        Zip.buildCentralDirectoryRecord = function (name, crc, lastMod, fileSize, lfhOffset) {
+        Zip.buildCentralDirectoryRecord = function (name, crc, lastMod, compressionMethod, fileSize, compressedSize, lfhOffset) {
             var d = Zip.formatDate(lastMod);
             var cdr = new ArrayBuffer(46), extraField = new ArrayBuffer(9);
             var v = new DataView(cdr);
@@ -340,7 +368,7 @@ var Zipper;
             v.setUint16(8, 0x0800, true);
             // Compression method
             // 0 = stored (no compression)
-            v.setUint16(10, 0x0000, true);
+            v.setUint16(10, compressionMethod, true);
             // Last mod file time
             v.setUint16(12, d & 0xffff, true);
             // Last mod file date
@@ -348,7 +376,7 @@ var Zipper;
             // CRC-32
             v.setUint32(16, crc, true);
             // Compressed size
-            v.setUint32(20, fileSize, true);
+            v.setUint32(20, compressedSize, true);
             // Uncompressed size
             v.setUint32(24, fileSize, true);
             // Filename length
@@ -412,6 +440,27 @@ var Zipper;
             v.setUint16(20, 0, true);
             return new Blob([eoc]);
         };
+        Zip.deflate = function (b, callback) {
+            if (!Zip.worker) {
+                Zip.worker = new Worker(Zip.createWorkerURL());
+                Zip.worker.onmessage = function (e) {
+                    var f = Zip.compressQueue.shift();
+                    if (f) {
+                        f(e.data);
+                    }
+                };
+            }
+            Zip.compressQueue.push(callback);
+            Zip.worker.postMessage(b, [b]);
+        };
+        Zip.createWorkerURL = function () {
+            if (Zip.workerURL) {
+                return Zip.workerURL;
+            }
+            Zip.workerURL = URL.createObjectURL(new Blob(["\n'use strict';\nimportScripts('https://cdnjs.cloudflare.com/ajax/libs/pako/1.0.3/pako_deflate.min.js');\nonmessage = function(e){\n   var b = pako.deflateRaw(e.data).buffer;\n   postMessage(b, [b]);\n}\n"], { type: 'text/javascript' }));
+            return Zip.workerURL;
+        };
+        Zip.compressQueue = [];
         return Zip;
     }());
     var Zip64 = (function () {
@@ -420,7 +469,7 @@ var Zipper;
         Zip64.calcLocalFileHeaderSize = function (name) {
             return 30 + name.byteLength + 32 + 9 + name.byteLength;
         };
-        Zip64.buildLocalFileHeader = function (name, crc, lastMod, fileSize, lfhOffset) {
+        Zip64.buildLocalFileHeader = function (name, crc, lastMod, compressionMethod, fileSize, compressedSize, lfhOffset) {
             var d = Zip64.formatDate(lastMod);
             var lfh = new ArrayBuffer(30), extraFieldZip64 = new ArrayBuffer(32), extraFieldName = new ArrayBuffer(9);
             var v = new DataView(lfh);
@@ -433,7 +482,7 @@ var Zipper;
             v.setUint16(6, 0x0800, true);
             // Compression method
             // 0 = stored (no compression)
-            v.setUint16(8, 0x0000, true);
+            v.setUint16(8, compressionMethod, true);
             // Last mod file time
             v.setUint16(10, d & 0xffff, true);
             // Last mod file date
@@ -471,7 +520,7 @@ var Zipper;
             // Original Size
             Zip64.setUint64(v, 4, fileSize);
             // Compressed Size
-            Zip64.setUint64(v, 12, fileSize);
+            Zip64.setUint64(v, 12, compressedSize);
             // Relative Header Offset
             Zip64.setUint64(v, 20, lfhOffset);
             // Disk Start Number
@@ -498,7 +547,7 @@ var Zipper;
         Zip64.calcCentralDirectoryRecordSize = function (name) {
             return 46 + name.byteLength + 32 + 9 + name.byteLength;
         };
-        Zip64.buildCentralDirectoryRecord = function (name, crc, lastMod, fileSize, lfhOffset) {
+        Zip64.buildCentralDirectoryRecord = function (name, crc, lastMod, compressionMethod, fileSize, compressedSize, lfhOffset) {
             var d = Zip64.formatDate(lastMod);
             var cdr = new ArrayBuffer(46), extraFieldZip64 = new ArrayBuffer(32), extraFieldName = new ArrayBuffer(9);
             var v = new DataView(cdr);
@@ -513,7 +562,7 @@ var Zipper;
             v.setUint16(8, 0x0800, true);
             // Compression method
             // 0 = stored (no compression)
-            v.setUint16(10, 0x0000, true);
+            v.setUint16(10, compressionMethod, true);
             // Last mod file time
             v.setUint16(12, d & 0xffff, true);
             // Last mod file date
@@ -546,7 +595,7 @@ var Zipper;
             // Original Size
             Zip64.setUint64(v, 4, fileSize);
             // Compressed Size
-            Zip64.setUint64(v, 12, fileSize);
+            Zip64.setUint64(v, 12, compressedSize);
             // Relative Header Offset
             Zip64.setUint64(v, 20, lfhOffset);
             // Disk Start Number

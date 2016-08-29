@@ -646,6 +646,32 @@ var psdtool;
                     });
                 })(faviewExports[i]);
             }
+            getElementById(document, 'export-tiled').addEventListener('click', function (e) {
+                var namingRule = getElementById(document, 'tiled-export-naming-rule');
+                if (!(namingRule instanceof HTMLSelectElement)) {
+                    throw new Error('#tiled-export-naming-rule is not SELECT');
+                }
+                var format = getElementById(document, 'tiled-export-format');
+                if (!(format instanceof HTMLSelectElement)) {
+                    throw new Error('#tiled-export-format is not SELECT');
+                }
+                var usetsx = getElementById(document, 'tiled-export-usetsx');
+                if (!(usetsx instanceof HTMLSelectElement)) {
+                    throw new Error('#tiled-export-usetsx is not SELECT');
+                }
+                var compress = getElementById(document, 'tiled-export-compress');
+                if (!(compress instanceof HTMLSelectElement)) {
+                    throw new Error('#tiled-export-compress is not SELECT');
+                }
+                var nr = namingRule.value.split(',');
+                var fmt = format.value.split(',');
+                var tsx = usetsx.value === 'yes';
+                var cmp = compress.value === 'deflate';
+                if (nr.length !== 2 || fmt.length !== 2) {
+                    throw new Error('tiled export form data is invalid');
+                }
+                _this.exportFaviewTiled(nr[0], nr[1] === 'flat', fmt[0], fmt[1], cmp, tsx);
+            }, false);
             getElementById(document, 'export-layer-structure').addEventListener('click', function (e) {
                 saveAs(new Blob([_this.layerRoot.text], {
                     type: 'text/plain'
@@ -819,7 +845,7 @@ var psdtool;
                 }, function (e) { return errorHandler('cannot create a zip archive', e); });
             };
             z.init(function () {
-                z.add('favorites.pfv', new Blob([_this.favorite.pfv], { type: 'text/plain; charset=utf-8' }), addedHandler, function (e) { return errorHandler('cannot write pfv to a zip archive', e); });
+                z.addCompress('favorites.pfv', new Blob([_this.favorite.pfv], { type: 'text/plain; charset=utf-8' }), addedHandler, function (e) { return errorHandler('cannot write pfv to a zip archive', e); });
                 var i = 0;
                 var process = function () {
                     if ('filter' in files[i]) {
@@ -843,66 +869,187 @@ var psdtool;
         };
         Main.prototype.exportFaview = function (includeItemCaption, flatten) {
             var _this = this;
+            var z = new Zipper.Zipper();
+            var prog = new ProgressDialog('Exporting...', '');
+            var aborted = false;
+            var errorHandler = function (readableMessage, err) {
+                z.dispose(function (err) { return undefined; });
+                prog.close();
+                console.error(err);
+                if (!aborted) {
+                    alert(readableMessage + ': ' + err);
+                }
+            };
+            // it is needed to avoid alert storm when reload during exporting.
+            window.addEventListener('unload', function () { aborted = true; }, false);
+            z.init(function () {
+                _this.enumerateFaview(function (path, image, progress, next) {
+                    var name = path.map(function (e, i) {
+                        return Main.cleanForFilename((i && includeItemCaption ? e.caption + '-' : '') + e.name);
+                    }).join(flatten ? '_' : '\\') + '.png';
+                    z.add(name, new Blob([Main.dataSchemeURIToArrayBuffer(image.toDataURL())], { type: 'image/png' }), next, function (e) { return errorHandler('cannot write png to a zip archive', e); });
+                    prog.update(progress, name);
+                }, function () {
+                    prog.update(1, 'building a zip...');
+                    z.generate(function (blob) {
+                        saveAs(blob, 'simple-view.zip');
+                        z.dispose(function (err) { return undefined; });
+                        prog.close();
+                    }, function (e) { return errorHandler('cannot create a zip archive', e); });
+                });
+            }, function (e) { return errorHandler('cannot create a zip archive', e); });
+        };
+        Main.prototype.exportFaviewTiled = function (namingStyle, flatten, fileFormat, tileFormat, compress, useTSX) {
+            var _this = this;
+            var ext;
+            switch (fileFormat) {
+                case 'tmx':
+                    ext = 'tmx';
+                    break;
+                case 'json':
+                    ext = 'json';
+                    break;
+                case 'js':
+                    ext = 'js';
+                    break;
+                case 'raw':
+                    switch (tileFormat) {
+                        case 'csv':
+                            ext = 'csv';
+                            break;
+                        case 'bin':
+                            ext = 'bin';
+                            break;
+                    }
+                    break;
+            }
+            var z = new Zipper.Zipper(), td = new tileder.Tileder();
+            var prog = new ProgressDialog('Exporting...', '');
+            var aborted = false;
+            var errorHandler = function (readableMessage, err) {
+                z.dispose(function (err) { return undefined; });
+                prog.close();
+                console.error(err);
+                if (!aborted) {
+                    alert(readableMessage + ': ' + err);
+                }
+            };
+            // it is needed to avoid alert storm when reload during exporting.
+            window.addEventListener('unload', function () { aborted = true; }, false);
+            var queue = 0, finished = 0, completed = false;
+            var processed = function () {
+                ++finished;
+                if (!completed || finished !== queue) {
+                    return;
+                }
+                prog.update(1, 'building a zip...');
+                z.generate(function (blob) {
+                    saveAs(blob, 'tiled.zip');
+                    z.dispose(function (err) { return undefined; });
+                    prog.close();
+                }, function (e) { return errorHandler('cannot create a zip archive', e); });
+            };
+            z.init(function () {
+                _this.enumerateFaview(function (path, image, progress, next) {
+                    var name = path.map(function (e, depth) {
+                        switch (namingStyle) {
+                            case 'standard':
+                                return Main.cleanForFilename((depth ? e.caption + '-' : '') + e.name);
+                            case 'compact':
+                                return Main.cleanForFilename(e.name);
+                            case 'index':
+                                return e.index;
+                        }
+                    }).join(flatten ? '_' : '\\');
+                    prog.update(progress / 2, name);
+                    td.add(name, image, next);
+                }, function () {
+                    td.finish(tileFormat === 'binz', function (tsx, progress) {
+                        ++queue;
+                        z.add(tsx.filename + ".png", new Blob([Main.dataSchemeURIToArrayBuffer(tsx.getImage(document).toDataURL())], { type: 'image/png' }), function () {
+                            prog.update(1 / 2, tsx.filename + ".png");
+                            processed();
+                            if (useTSX) {
+                                ++queue;
+                                z.addCompress(tsx.filename + ".tsx", new Blob([tsx.export()], { type: 'text/xml; charset=utf-8' }), function () {
+                                    prog.update(1 / 2, tsx.filename + ".tsx");
+                                    processed();
+                                }, function (e) { return errorHandler('cannot write tsx to a zip archive', e); });
+                            }
+                        }, function (e) { return errorHandler('cannot write png to a zip archive', e); });
+                    }, function (image, progress) {
+                        var f = compress ? z.addCompress : z.add;
+                        f = f.bind(z);
+                        ++queue;
+                        f(image.name + "." + ext, image.export(fileFormat, tileFormat, useTSX), function () {
+                            prog.update(progress / 2 + 1 / 2, image.name + "." + ext);
+                            processed();
+                        }, function (e) { return errorHandler('cannot write file to a zip archive', e); });
+                    }, function () {
+                        ++queue;
+                        completed = true;
+                        processed();
+                    });
+                });
+                // make faview.json / faview.js
+                var faviewData = {
+                    format: ext,
+                    flatten: flatten,
+                    namingStyle: namingStyle,
+                    roots: _this.faview.items.map(function (root) {
+                        return {
+                            name: root.name,
+                            captions: root.selects.map(function (sel) { return Main.cleanForFilename(sel.caption); }),
+                            selects: root.selects.map(function (sel) { return sel.items.map(function (item) { return Main.cleanForFilename(item.name); }); })
+                        };
+                    })
+                };
+                if (fileFormat === 'js') {
+                    ++queue;
+                    z.addCompress('faview.js', new Blob(["onFaviewLoaded(", JSON.stringify(faviewData), ');'], { type: 'text/javascript; charset=utf-8' }), function () { return processed(); }, function (e) { return errorHandler("cannot write faview.js to a zip archive", e); });
+                    ++queue;
+                    z.addCompress('viewer.html', new Blob([tileder.getViewer()], { type: 'text/html; charset=utf-8' }), function () { return processed(); }, function (e) { return errorHandler("cannot write viewer.html to a zip archive", e); });
+                }
+                else {
+                    ++queue;
+                    z.addCompress('faview.json', new Blob([JSON.stringify(faviewData)], { type: 'application/json; charset=utf-8' }), function () { return processed(); }, function (e) { return errorHandler("cannot write faview.json to a zip archive", e); });
+                }
+            }, function (e) { return errorHandler('cannot create a zip archive', e); });
+        };
+        Main.prototype.enumerateFaview = function (item, complete) {
+            var _this = this;
             this.refreshFaview();
             var items = this.faview.items;
             var total = 0;
             for (var _i = 0, items_1 = items; _i < items_1.length; _i++) {
-                var item = items_1[_i];
-                if (!item.selects.length) {
+                var item_1 = items_1[_i];
+                if (!item_1.selects.length) {
                     continue;
                 }
                 var n = 1;
-                for (var _a = 0, _b = item.selects; _a < _b.length; _a++) {
+                for (var _a = 0, _b = item_1.selects; _a < _b.length; _a++) {
                     var select = _b[_a];
                     n *= select.items.length;
                 }
                 total += n;
             }
             if (!total) {
-                alert('You need at least one simple-view item to export.');
                 return;
             }
             var backup = this.layerRoot.serialize(true);
-            var z = new Zipper.Zipper();
-            var prog = new ProgressDialog('Exporting...', '');
-            var aborted = false;
-            var errorHandler = function (readableMessage, err) {
-                z.dispose(function (err) { return undefined; });
-                console.error(err);
-                if (!aborted) {
-                    alert(readableMessage + ': ' + err);
-                }
-                prog.close();
-            };
-            // it is needed to avoid alert storm when reload during exporting.
-            window.addEventListener('unload', function () { aborted = true; }, false);
             var added = 0;
-            var addedHandler = function (name) {
-                if (++added < total) {
-                    prog.update(added / total, added === 1 ? 'drawing...' : '(' + added + '/' + total + ') ' + name);
-                    return;
-                }
-                _this.layerRoot.deserialize(backup);
-                prog.update(1, 'building a zip...');
-                z.generate(function (blob) {
-                    prog.close();
-                    saveAs(blob, 'simple-view.zip');
-                    z.dispose(function (err) { return undefined; });
-                }, function (e) { return errorHandler('cannot create a zip archive', e); });
-            };
             var sels;
             var path = [];
-            var nextRoot;
-            var nextItem = function (depth, index, complete) {
+            var nextItemSet = function (depth, index, complete) {
                 var sel = sels[depth];
-                var item = sel.items[index];
-                path.push(Main.cleanForFilename((includeItemCaption ? sel.caption + '-' : '') + item.name));
-                var fav = _this.favorite.get(item.value);
-                _this.layerRoot.deserializePartial(undefined, fav.data.value, _this.favorite.getFirstFilter(fav));
-                var next = function () {
+                var selItem = sel.items[index];
+                path.push({ caption: sel.caption, name: selItem.name, index: index });
+                var fav = _this.favorite.get(selItem.value);
+                _this.layerRoot.deserializePartial(undefined, fav.data ? fav.data.value : '', _this.favorite.getFirstFilter(fav));
+                var nextItem = function () {
                     path.pop();
                     if (index < sel.items.length - 1) {
-                        nextItem(depth, index + 1, complete);
+                        nextItemSet(depth, index + 1, complete);
                     }
                     else {
                         complete();
@@ -910,10 +1057,10 @@ var psdtool;
                 };
                 if (depth < sels.length - 1) {
                     if (sels[depth + 1].items.length) {
-                        nextItem(depth + 1, 0, next);
+                        nextItemSet(depth + 1, 0, nextItem);
                     }
                     else {
-                        next();
+                        nextItem();
                     }
                 }
                 else {
@@ -921,19 +1068,15 @@ var psdtool;
                         if (progress !== 1) {
                             return;
                         }
-                        var name = path.join(flatten ? '_' : '\\') + '.png';
-                        z.add(name, new Blob([Main.dataSchemeURIToArrayBuffer(canvas.toDataURL())], { type: 'image/png' }), function () {
-                            addedHandler(name);
-                            next();
-                        }, function (e) { return errorHandler('cannot write png to a zip archive', e); });
+                        item(path, canvas, (++added) / total, nextItem);
                     });
                 }
             };
-            nextRoot = function (index, complete) {
-                var item = items[index];
-                path.push(Main.cleanForFilename(item.name));
-                sels = item.selects;
-                var next = function () {
+            var nextRoot = function (index, complete) {
+                var selItem = items[index];
+                path.push({ caption: 'root', name: selItem.name, index: index });
+                sels = selItem.selects;
+                var nextRootItem = function () {
                     path.pop();
                     if (++index >= items.length) {
                         complete();
@@ -943,15 +1086,16 @@ var psdtool;
                     }
                 };
                 if (sels.length && sels[0].items.length) {
-                    nextItem(0, 0, next);
+                    nextItemSet(0, 0, nextRootItem);
                 }
                 else {
-                    next();
+                    nextRootItem();
                 }
             };
-            z.init(function () {
-                nextRoot(0, function () { return undefined; });
-            }, function (e) { return errorHandler('cannot create a zip archive', e); });
+            nextRoot(0, function () {
+                _this.layerRoot.deserialize(backup);
+                complete();
+            });
         };
         Main.prototype.initUI = function () {
             var _this = this;

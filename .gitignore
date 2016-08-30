@@ -1,4 +1,4 @@
 /psdtool/*.json
+*.inc.js
 *.ts
 *.go
-

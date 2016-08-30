@@ -703,19 +703,23 @@ var psdtool;
             if (!this.faview) {
                 var rootSel = void 0;
                 var root = void 0;
-                var elem = getElementById(document, 'faview-root-node');
-                if (elem instanceof HTMLSelectElement) {
-                    rootSel = elem;
+                {
+                    var elem = getElementById(document, 'faview-root-node');
+                    if (elem instanceof HTMLSelectElement) {
+                        rootSel = elem;
+                    }
+                    else {
+                        throw new Error('element not found: #faview-root-node');
+                    }
                 }
-                else {
-                    throw new Error('element not found: #faview-root-node');
-                }
-                elem = getElementById(document, 'faview-tree');
-                if (elem instanceof HTMLUListElement) {
-                    root = elem;
-                }
-                else {
-                    throw new Error('element not found: #faview-tree');
+                {
+                    var elem = getElementById(document, 'faview-tree');
+                    if (elem instanceof HTMLUListElement) {
+                        root = elem;
+                    }
+                    else {
+                        throw new Error('element not found: #faview-tree');
+                    }
                 }
                 this.faview = new Favorite.Faview(this.favorite, rootSel, root);
                 this.faview.onRootChanged = function () { return _this.faviewOnRootChanged(); };
@@ -1152,24 +1156,30 @@ var psdtool;
                 e.dataTransfer.setData('text/plain', s);
             }, false);
             jQuery('#main').on('splitpaneresize', function (e) { return _this.resized(); }).splitPane();
-            elem = getElementById(document, 'flip-x');
-            if (elem instanceof HTMLInputElement) {
-                this.flipX = elem;
+            {
+                var elem_2 = getElementById(document, 'flip-x');
+                if (elem_2 instanceof HTMLInputElement) {
+                    this.flipX = elem_2;
+                }
+                jQuery(this.flipX).on('change', function (e) { return _this.redraw(); });
             }
-            jQuery(this.flipX).on('change', function (e) { return _this.redraw(); });
-            elem = getElementById(document, 'flip-y');
-            if (elem instanceof HTMLInputElement) {
-                this.flipY = elem;
+            {
+                var elem_3 = getElementById(document, 'flip-y');
+                if (elem_3 instanceof HTMLInputElement) {
+                    this.flipY = elem_3;
+                }
+                jQuery(this.flipY).on('change', function (e) { return _this.redraw(); });
             }
-            jQuery(this.flipY).on('change', function (e) { return _this.redraw(); });
-            elem = getElementById(document, 'fixed-side');
-            if (elem instanceof HTMLSelectElement) {
-                this.fixedSide = elem;
+            {
+                var elem_4 = getElementById(document, 'fixed-side');
+                if (elem_4 instanceof HTMLSelectElement) {
+                    this.fixedSide = elem_4;
+                }
+                else {
+                    throw new Error('element not found: #fixed-side');
+                }
+                this.fixedSide.addEventListener('change', function (e) { return _this.redraw(); }, false);
             }
-            else {
-                throw new Error('element not found: #fixed-side');
-            }
-            this.fixedSide.addEventListener('change', function (e) { return _this.redraw(); }, false);
             var lastPx;
             this.maxPixels = Main.getInputElement('#max-pixels');
             this.maxPixels.addEventListener('blur', function (e) {
@@ -1181,28 +1191,30 @@ var psdtool;
                 _this.maxPixels.value = v;
                 _this.redraw();
             }, false);
-            this.seqDlPrefix = Main.getInputElement('#seq-dl-prefix');
-            this.seqDlNum = Main.getInputElement('#seq-dl-num');
-            elem = getElementById(document, 'seq-dl');
-            if (elem instanceof HTMLButtonElement) {
-                this.seqDl = elem;
-            }
-            else {
-                throw new Error('element not found: #seq-dl');
-            }
-            this.seqDl.addEventListener('click', function (e) {
-                var prefix = _this.seqDlPrefix.value;
-                if (_this.seqDlNum.value === '') {
-                    _this.save(prefix + '.png');
-                    return;
+            {
+                this.seqDlPrefix = Main.getInputElement('#seq-dl-prefix');
+                this.seqDlNum = Main.getInputElement('#seq-dl-num');
+                var elem_5 = getElementById(document, 'seq-dl');
+                if (elem_5 instanceof HTMLButtonElement) {
+                    this.seqDl = elem_5;
                 }
-                var num = parseInt(Main.normalizeNumber(_this.seqDlNum.value), 10);
-                if (num < 0) {
-                    num = 0;
+                else {
+                    throw new Error('element not found: #seq-dl');
                 }
-                _this.save(prefix + ('0000' + num).slice(-4) + '.png');
-                _this.seqDlNum.value = (num + 1).toString();
-            }, false);
+                this.seqDl.addEventListener('click', function (e) {
+                    var prefix = _this.seqDlPrefix.value;
+                    if (_this.seqDlNum.value === '') {
+                        _this.save(prefix + '.png');
+                        return;
+                    }
+                    var num = parseInt(Main.normalizeNumber(_this.seqDlNum.value), 10);
+                    if (num < 0) {
+                        num = 0;
+                    }
+                    _this.save(prefix + ('0000' + num).slice(-4) + '.png');
+                    _this.seqDlNum.value = (num + 1).toString();
+                }, false);
+            }
             Mousetrap.pause();
         };
         Main.prototype.redraw = function () {

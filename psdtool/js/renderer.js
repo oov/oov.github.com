@@ -65,7 +65,7 @@ var Renderer;
         function Renderer(psd) {
             this.psd = psd;
             this.canvas = document.createElement('canvas');
-            this.root = new Node(null, null);
+            this.root = new Node(undefined, undefined);
             this.nodes = {};
             this.buildTree(this.root, psd);
             this.root.buffer = document.createElement('canvas');

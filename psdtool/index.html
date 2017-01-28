@@ -3,7 +3,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PSDTool</title>
-<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+	crossorigin="anonymous">
 <link rel='stylesheet' href='https://fonts.googleapis.com/css?family=Roboto+Condensed:700'>
 <link href="css/3rd.min.css" rel="stylesheet">
 <link href="css/main.css" rel="stylesheet">
@@ -19,7 +20,8 @@
 			</div>
 			<div class="col-sm-4 text-nowrap psdtool-header">
 				<a href="manual.html" target="manual" class="btn btn-default">説明書</a>
-				<a href="https://docs.google.com/forms/d/1JUpD_i4e1-lR1CbeE_Lf_83jYGfzVNYg1Bjjn3hOAIw/viewform?entry.484637404=%E4%B8%8D%E5%85%B7%E5%90%88%E3%81%8C%E3%81%82%E3%81%A3%E3%81%9F&entry.1692870994" target="report" class="btn btn-default">報告フォーム</a>
+				<a href="https://docs.google.com/forms/d/1JUpD_i4e1-lR1CbeE_Lf_83jYGfzVNYg1Bjjn3hOAIw/viewform?entry.484637404=%E4%B8%8D%E5%85%B7%E5%90%88%E3%81%8C%E3%81%82%E3%81%A3%E3%81%9F&entry.1692870994"
+					target="report" class="btn btn-default">報告フォーム</a>
 			</div>
 		</div>
 		<div id="error-report-ui" class="row">
@@ -51,6 +53,11 @@
 								<dd class="checkbox">
 									<label for="option-safe-mode">
 										<input type="checkbox" id="option-safe-mode"> 独自拡張機能を無効化
+									</label>
+								</dd>
+								<dd class="checkbox">
+									<label for="option-use-old-resizer">
+										<input type="checkbox" id="option-use-old-resizer"> 縮小を以前の仕様で行う
 									</label>
 								</dd>
 							</dl>
@@ -127,7 +134,8 @@
 							PSDTool から直接「拡張編集」に画像をドラッグ＆ドロップして読み込むことができるようになるプラグインがあります。
 						</p>
 						<p>
-							ごちゃまぜドロップス | <a href="https://twitter.com/oovch/status/699737247260606465" target="_blank">30秒紹介動画</a> / <a href="https://github.com/oov/aviutl_oledd#readme" target="_blank">README</a> / <a href="https://github.com/oov/aviutl_oledd/releases" target="_blank">ダウンロード</a>
+							ごちゃまぜドロップス | <a href="https://twitter.com/oovch/status/699737247260606465" target="_blank">30秒紹介動画</a> / <a href="https://github.com/oov/aviutl_oledd#readme"
+								target="_blank">README</a> / <a href="https://github.com/oov/aviutl_oledd/releases" target="_blank">ダウンロード</a>
 						</p>
 					</div>
 				</div>
@@ -176,8 +184,10 @@
 						<div id="favorite-toolbar" class="psdtool-tab-toolbar clearfix">
 							<div class="btn-toolbar pull-right" role="toolbar" aria-label="お気に入り編集">
 								<div class="btn-group" role="group" aria-label="新規">
-									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-item="#favorite-tree" title="現在のレイヤー表示をお気に入りに追加(Ctrl + B / Option + B)" data-caption="現在のレイヤー表示をお気に入りに追加"><span class="glyphicon glyphicon-star"></span></button>
-									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-folder="#favorite-tree" title="新規フォルダー(Ctrl + D / Option + D)" data-caption="新規フォルダーの追加"><span class="glyphicon glyphicon-folder-open"></span></button>
+									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-item="#favorite-tree" title="現在のレイヤー表示をお気に入りに追加(Ctrl + B / Option + B)"
+										data-caption="現在のレイヤー表示をお気に入りに追加"><span class="glyphicon glyphicon-star"></span></button>
+									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-add-folder="#favorite-tree" title="新規フォルダー(Ctrl + D / Option + D)"
+										data-caption="新規フォルダーの追加"><span class="glyphicon glyphicon-folder-open"></span></button>
 								</div>
 								<div class="btn-group" role="group" aria-label="編集">
 									<button type="button" class="btn btn-default btn-sm" data-psdtool-tree-rename="#favorite-tree" title="名前の変更(F2)"><span class="glyphicon glyphicon-pencil"></span></button>
@@ -309,47 +319,41 @@
 					<h4 class="modal-title" id="export-dialog-label">エクスポート</h4>
 				</div>
 				<div class="modal-body">
-					<p>
-						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-pfv">PFV ファイルをエクスポート</button>
-					</p>
+					<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-pfv">PFV ファイルをエクスポート</button>
 					<p><small>PFV ファイルはお気に入りの情報が記録されたテキストファイルで、「インポート」を使って読み込んだりエディタで開いて直接編集したりできます。</small></p>
-					<p>
-						<div class="btn-group">
-							<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-zip">画像を ZIP ファイルでエクスポート</button>
-							<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-								<span class="caret"></span>
-								<span class="sr-only">オプション</span>
-							</button>
-							<ul class="dropdown-menu">
-								<li><a href="#" data-dismiss="modal" id="export-favorites-zip-filter-solo">フィルタリングされた項目は残ったパーツのみを出力</a></li>
-							</ul>
-						</div>
-					</p>
+					<div class="btn-group">
+						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-favorites-zip">画像を ZIP ファイルでエクスポート</button>
+						<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							<span class="caret"></span>
+							<span class="sr-only">オプション</span>
+						</button>
+						<ul class="dropdown-menu">
+							<li><a href="#" data-dismiss="modal" id="export-favorites-zip-filter-solo">フィルタリングされた項目は残ったパーツのみを出力</a></li>
+						</ul>
+					</div>
 					<p><small>PNG ファイルと PFV ファイルを無圧縮の ZIP ファイルに書き出します。画像には現在の反転や縮小の設定が適用されます。</small></p>
-					<p>
-						<div class="btn-group">
-							<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-								シンプルビューの全パターンをエクスポート <span class="caret"></span>
-							</button>
-							<ul class="dropdown-menu">
-								<li class="dropdown-header">PNG 詰め合わせ ZIP</li>
-								<li><a href="#" data-dismiss="modal" data-export-faview="standard" data-structure="tree"><span class="psdtool-export-faview-type-caption">パーツ名あり / 入れ子</span><small class="text-muted">例: キャラ名\眉-困り\目-にっこり\口-笑い.png</small></a></li>
-								<li><a href="#" data-dismiss="modal" data-export-faview="standard" data-structure="flat"><span class="psdtool-export-faview-type-caption">パーツ名あり / フラット</span><small class="text-muted">例: キャラ名_眉-困り_目-にっこり_口-笑い.png</small></a></li>
-								<li><a href="#" data-dismiss="modal" data-export-faview="compact" data-structure="tree"><span class="psdtool-export-faview-type-caption">パーツ名なし / 入れ子</span><small class="text-muted">例: キャラ名\困り\にっこり\笑い.png</small></a></li>
-								<li><a href="#" data-dismiss="modal" data-export-faview="compact" data-structure="flat"><span class="psdtool-export-faview-type-caption">パーツ名なし / フラット</span><small class="text-muted">例: キャラ名_困り_にっこり_笑い.png</small></a></li>
-								<li role="separator" class="divider"></li>
-								<li><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#tiled-export-dialog">Tiled Map Editor 用にエクスポート...</a></li>
-							</ul>
-						</div>
-					</p>
+					<div class="btn-group">
+						<button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+							シンプルビューの全パターンをエクスポート <span class="caret"></span>
+						</button>
+						<ul class="dropdown-menu">
+							<li class="dropdown-header">PNG 詰め合わせ ZIP</li>
+							<li><a href="#" data-dismiss="modal" data-export-faview="standard" data-structure="tree"><span class="psdtool-export-faview-type-caption">パーツ名あり / 入れ子</span><small class="text-muted">例: キャラ名\眉-困り\目-にっこり\口-笑い.png</small></a></li>
+							<li><a href="#" data-dismiss="modal" data-export-faview="standard" data-structure="flat"><span class="psdtool-export-faview-type-caption">パーツ名あり / フラット</span><small class="text-muted">例: キャラ名_眉-困り_目-にっこり_口-笑い.png</small></a></li>
+							<li><a href="#" data-dismiss="modal" data-export-faview="compact" data-structure="tree"><span class="psdtool-export-faview-type-caption">パーツ名なし / 入れ子</span><small class="text-muted">例: キャラ名\困り\にっこり\笑い.png</small></a></li>
+							<li><a href="#" data-dismiss="modal" data-export-faview="compact" data-structure="flat"><span class="psdtool-export-faview-type-caption">パーツ名なし / フラット</span><small class="text-muted">例: キャラ名_困り_にっこり_笑い.png</small></a></li>
+							<li role="separator" class="divider"></li>
+							<li><a href="#" data-dismiss="modal" data-toggle="modal" data-target="#tiled-export-dialog">Tiled Map Editor 用にエクスポート...</a></li>
+							<li role="separator" class="divider hide"></li>
+							<li class="hide"><a href="#" data-dismiss="modal" data-export-faview="prima">PRIMA</a></li>
+						</ul>
+					</div>
 					<p><small>
 						シンプルビューで作成可能な全ての組み合わせを書き出します。
 						ただし「目を決めるセレクトボックスが複数ある」など項目を操作した順番によって結果が変わるようなものには対応していません。
 						画像には現在の反転や縮小の設定が適用されます。
 					</small></p>
-					<p>
-						<button type="button" class="btn btn-default" data-dismiss="modal" id="export-layer-structure">レイヤー構造をテキストファイルでエクスポート</button>
-					</p>
+					<button type="button" class="btn btn-default" data-dismiss="modal" id="export-layer-structure">レイヤー構造をテキストファイルでエクスポート</button>
 					<p><small>PSD ファイルのレイヤー構造をタブで整形された UTF-8 テキストファイルとして出力します。これにはお気に入りのデータは一切含まれていません。</small></p>
 				</div>
 			</div>
@@ -493,11 +497,11 @@
 									<option value="json,csv">JSON / タイルデータ: 配列</option>
 									<option value="json,bin">JSON / タイルデータ: Base64</option>
 									<option value="json,binz">JSON / タイルデータ: Base64(zlib)</option>
-									<option value="raw,csv">CSV</option>
-									<option value="raw,bin">Binary</option>
 									<option value="js,csv">JavaScript + HTML / タイルデータ: CSV</option>
 									<option value="js,bin">JavaScript + HTML / タイルデータ: Base64</option>
 									<option value="js,binz">JavaScript + HTML / タイルデータ: Base64(zlib)</option>
+									<option value="raw,csv">CSV</option>
+									<option value="raw,bin">Binary</option>
 								</select>
 							</p>
 						</dd>
@@ -526,21 +530,13 @@
 			</div>
 		</div>
 	</div>
-
-
-	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.2/jquery.min.js"></script>
-	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha256-KXn5puMvxCw+dAYznun+drMdG1IFl3agK0p/pqT9KAo= sha512-2e8qq0ETcfWRI4HJBzQiA3UoyFk6tbNyG+qSaIBZLyW9Xf3sWZHN/lxe9fTh1U45DpPf07yj94KsUHHWe4Yk1A==" crossorigin="anonymous"></script>
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/mithril/0.2.2-rc.1/mithril.min.js"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+		crossorigin="anonymous"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/mithril/0.2.5/mithril.min.js"></script>
+	<script id="psdgo" src="js/psd.min.js"></script>
 	<script src="js/3rd.min.js"></script>
-	<script src="js/blend/blend.js"></script>
-	<script id="psdgo" src="js/psd/psd.js"></script>
-	<script src="js/downscaler.js"></script>
-	<script src="js/renderer.js"></script>
-	<script src="js/layertree.js"></script>
-	<script src="js/favorite.js"></script>
-	<script src="js/zipper.js"></script>
-	<script id="tileder" src="js/tileder.js"></script>
-	<script src="js/main.js"></script>
+	<script src="js/index.js"></script>
 </body>
 
 </html>
